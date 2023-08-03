@@ -1,0 +1,12 @@
+[server]
+ip="127.0.0.1"
+port=12370
+
+[oauth]
+
+[oauth.github]
+api_server_endpoint="https://api.github.com"
+oauth_server_endpoint="https://github.com/login/oauth"
+client_id="0dc886644d47c0eb7426"
+client_secret="610fc0f712e74b94b6dc6447f3c602aa78767f99"
+redirect_uri="http://localhost:12370/oauth/callback"
