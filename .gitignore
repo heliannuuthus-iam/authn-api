@@ -16,3 +16,9 @@ target/
 /target
 
 .vscode/
+
+.cargo/
+
+.DS_Store
+log/**
+.idea/**

@@ -1,39 +1,27 @@
-use std::{fs, path::Path};
-
-use lazy_static::lazy_static;
-use serde::Deserialize;
-use toml;
-
-#[derive(Debug, Deserialize)]
-pub struct Config {
-    pub server: Option<ServerConfig>,
-    pub oauth: Option<OauthConfig>,
+pub fn env_var<T>(name: &str) -> T
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Debug,
+{
+    std::env::var(name)
+        .unwrap_or_else(|_| panic!("{} env variable load failed", name))
+        .parse::<T>()
+        .unwrap_or_else(|_| panic!("{} env variable parse failed", name))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ServerConfig {
-    pub ip: Option<String>,
-    pub port: Option<u16>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct OauthConfig {
-    pub github: Option<OauthGithubConfig>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct OauthGithubConfig {
-    pub api_server_endpoint: Option<String>,
-    pub oauth_server_endpoint: Option<String>,
-    pub client_id: Option<String>,
-    pub client_secret: Option<String>,
-    pub redirect_uri: Option<String>,
-}
-
-pub fn global_config() -> Config {
-    let config_content =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("config.toml"))
-            .expect("config.toml is nonexistent");
-
-    toml::from_str(config_content.as_str()).unwrap()
+pub fn env_var_default<T>(name: &str, default_value: T) -> T
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Debug,
+{
+    match std::env::var(name) {
+        Ok(var) => var.parse::<T>().unwrap_or_else(|_| {
+            tracing::error!("{} env variable parse failed", name);
+            default_value
+        }),
+        Err(_) => {
+            tracing::error!("{} env variable load failed", name);
+            default_value
+        }
+    }
 }
