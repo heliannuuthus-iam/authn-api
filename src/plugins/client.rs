@@ -1,25 +1,20 @@
 use reqwest::{Client, ClientBuilder};
-use std::{error, fmt, io, time::Duration};
+use std::{io, time::Duration};
+use thiserror;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<T>
+where
+    T: std::error::Error + 'static,
 {
-    Reqwest(T),
-    Http(reqwest::Error),
-    Io(io::Error),
+    #[error("request failed")]
+    Reqwest(#[source] T),
+    #[error("request failed")]
+    Http(#[source] http::Error),
+    #[error("request failed")]
+    Io(#[source] io::Error),
+    #[error("request failed: {}", _0)]
     Other(String),
-}
-
-impl<T> fmt::Display for Error<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-
-    }
-}
-
-impl<T> error::Error for Error<T> {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
-    }
 }
 
 pub struct AppState {
