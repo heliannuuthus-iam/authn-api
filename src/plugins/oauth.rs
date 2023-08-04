@@ -1,9 +1,19 @@
+use crate::plugins::client::{Error, WEB_CLIENT};
 use oauth2::{HttpRequest, HttpResponse};
-use std::error;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct  AuthRequest {
+    pub code: String,
+    pub state: String,
+}
 
 
-pub async fn async_http_client(request: HttpRequest) -> Result<HttpResponse, reqwest::Error> {
-    let mut request_builder = client
+
+pub async fn async_http_client(
+    request: HttpRequest,
+) -> Result<HttpResponse, Error<reqwest::Error>> {
+    let mut request_builder = WEB_CLIENT
         .request(request.method, request.url.as_str())
         .body(request.body);
     for (name, value) in &request.headers {
@@ -11,14 +21,11 @@ pub async fn async_http_client(request: HttpRequest) -> Result<HttpResponse, req
     }
     let request = request_builder.build().map_err(Error::Reqwest)?;
 
-    let response = client.execute(request).await.map_err(Error::Reqwest)?;
+    let response = WEB_CLIENT.execute(request).await.map_err(Error::Reqwest)?;
 
-    let status_code = response.status();
-    let headers = response.headers().to_owned();
-    let chunks = response.bytes().await.map_err(Error::Reqwest)?;
     Ok(HttpResponse {
-        status_code,
-        headers,
-        body: chunks.to_vec(),
+        status_code: response.status(),
+        headers: response.headers().to_owned(),
+        body: response.bytes().await.map_err(Error::Reqwest)?.to_vec(),
     })
 }

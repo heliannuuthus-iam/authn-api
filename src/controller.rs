@@ -1,3 +1,3 @@
 
 
-pub mod authentication_controller;
+pub mod auth_controller;

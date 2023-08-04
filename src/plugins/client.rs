@@ -1,7 +1,7 @@
 use reqwest::{Client, ClientBuilder};
-use std::{io, time::Duration};
+use std::{ io, time::Duration};
 use thiserror;
-
+use lazy_static::lazy_static;
 #[derive(Debug, thiserror::Error)]
 pub enum Error<T>
 where
@@ -17,14 +17,9 @@ where
     Other(String),
 }
 
-pub struct AppState {
-    web_client: Client,
-}
 
-impl AppState {
-    pub fn get_client(&self) -> Client {
-        self.web_client
-    }
+lazy_static! {
+    pub static ref WEB_CLIENT: Client = client();
 }
 
 pub fn client() -> Client {
