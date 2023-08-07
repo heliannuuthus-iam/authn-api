@@ -9,31 +9,21 @@ on:
 jobs:
   format:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
     steps:
-      - uses: actions/checkout@v2
-      - name: checkout
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          override: true
-          components: rustfmt, clippy
-
-      - name: format
-        run: cargo fmt --all -- --check
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: cargo fmt --all -- --check
 
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: setup
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          override: true
-          components: rustfmt, clippy
-      - name: build
-        run: |
-          cargo build
-          cargo test
+      - run: cargo build --verbose
+      - run: cargo test --verbose
 
   containeraized:
     runs-on: ubuntu-latest
