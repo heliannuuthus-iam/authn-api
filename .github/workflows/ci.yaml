@@ -12,12 +12,12 @@ jobs:
     steps:
       - run: ls -l
       - run: rustup update stable && rustup default stable
-      - run: cargo fmt --all --check
       - name: Upload artifact
         uses: actions/upload-artifact@v1
         with:
           name: surefire-reports
           path: .
+      - run: cargo fmt --all --check
 
   build:
     needs: format
