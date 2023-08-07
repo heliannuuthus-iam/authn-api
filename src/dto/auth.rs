@@ -49,7 +49,11 @@ impl Flow {
     }
 
     pub fn next_uri(&self) -> HttpResponse {
-        HttpResponse::Found().append_header((http::header::LOCATION, self.redirect_url.as_ref().unwrap().to_string()))
-        .finish()
+        HttpResponse::Found()
+            .append_header((
+                http::header::LOCATION,
+                self.redirect_url.as_ref().unwrap().to_string(),
+            ))
+            .finish()
     }
 }
