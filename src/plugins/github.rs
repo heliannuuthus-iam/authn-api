@@ -1,4 +1,4 @@
-use crate::common::config::{OauthGithubConfig, self};
+use crate::common::config::{self, OauthGithubConfig};
 use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl};
 
 #[derive(Clone, Debug)]
@@ -6,7 +6,6 @@ pub struct GitHubState {
     pub oauth_client: BasicClient,
     pub endpoint: String,
 }
-
 
 pub fn github_oauth_state(config: OauthGithubConfig) -> GitHubState {
     let github_client_id = ClientId::new(

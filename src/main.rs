@@ -1,11 +1,12 @@
-use actix_web::{web::{self, Data}, App, HttpServer};
-
+use actix_web::{
+    web::{self, Data},
+    App, HttpServer,
+};
 mod common;
 mod controller;
-mod service;
-mod plugins;
 mod dto;
-
+mod plugins;
+mod service;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let config: common::config::Config = common::config::global_config();

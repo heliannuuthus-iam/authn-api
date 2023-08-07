@@ -1,31 +1,46 @@
-use thiserror::Error;
+use actix_web::HttpResponse;
+use http::StatusCode;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Erorr {
-    #[error("{0}")]
-    UnAuthentication(String),
-    #[error("access_denied {0}")]
-    AccessDenied(String),
+    #[error("unauthentication: {msg}")]
+    UnAuthentication { code: http::StatusCode, msg: String },
+    #[error("access_denied msg")]
+    AccessDenied { code: http::StatusCode, msg: String },
 }
 
 pub struct Params {
-    
+    connection: String,
 }
 
 pub struct Flow {
     params: Params,
-    code: Option<u16>,
-    message: Option<String>,
+    code: http::StatusCode,
     error: Option<Erorr>,
+    message: Option<String>,
 }
 
 impl Flow {
     pub fn new(params: Params) -> Flow {
         Flow {
             params: params,
-            code: None,
+            code: StatusCode::OK,
             message: None,
             error: None,
         }
+    }
+
+    pub fn misinterpret(&self) -> &Self {
+        match self.code {
+            StatusCode::UNAUTHORIZED => {}
+
+            _ => {
+                if (self.code.is_server_error()) {
+                    self.error = Erorr::UnAuthentication { code: (Http), msg: () }
+                }
+            }
+        }
+
+        self
     }
 }

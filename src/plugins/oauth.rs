@@ -3,12 +3,10 @@ use oauth2::{HttpRequest, HttpResponse};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub struct  AuthRequest {
+pub struct AuthRequest {
     pub code: String,
     pub state: String,
 }
-
-
 
 pub async fn async_http_client(
     request: HttpRequest,
