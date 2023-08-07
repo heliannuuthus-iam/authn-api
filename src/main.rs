@@ -1,7 +1,4 @@
-use actix_web::{
-    web::{self, Data},
-    App, HttpServer,
-};
+use actix_web::{web::Data, App, HttpServer};
 mod common;
 mod controller;
 mod dto;

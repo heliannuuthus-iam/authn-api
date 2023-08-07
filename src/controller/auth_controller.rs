@@ -1,3 +1,4 @@
+use crate::dto::auth::{Flow, Params};
 use crate::plugins::oauth;
 use crate::plugins::{github::GitHubState, oauth::AuthRequest};
 use crate::service::auth_service;
@@ -6,9 +7,12 @@ use actix_web::{get, post, routes, web, HttpRequest, HttpResponse, Responder};
 use http::header;
 use oauth2::{AuthorizationCode, TokenResponse};
 
-#[get("/authorize/{idp_type}")]
-pub async fn authorize(idp_type: web::Path<IdpType>, request: HttpRequest) -> HttpResponse {
-    auth_service::authorize(idp_type.into_inner(), request).await
+#[routes]
+#[post("/authorize")]
+#[get("/authorize")]
+pub async fn authorize(web::Json(params): web::Json<Params>, request: HttpRequest) -> HttpResponse {
+    let flow = Flow::new(params);
+    auth_service::authorize(&flow, request).await
 }
 
 #[routes]

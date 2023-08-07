@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: update
+        run: rustup update stable && rustup default stable
       - name: cache
         id: cache-primes
         uses: actions/cache@v3
@@ -22,13 +24,10 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: update
-        run: rustup update stable && rustup default stable
       - name: checkout
         run: cargo fmt --all --check
       - uses: actions/upload-artifact@v3
         with:
-          name: artifact
           path: .
 
   build:

@@ -2,35 +2,33 @@ use super::idp::{
     github::GithubBuilder, google::Google, tencent::Tencent, wechat::WeChat, IdentifyProvider,
     IdpType,
 };
-use crate::plugins::github::GitHubState;
+use crate::{dto::auth::Flow, plugins::github::GitHubState};
 use actix_web::{HttpRequest, HttpResponse};
 use http::header;
 
 // 生成认证链接
-pub async fn authorize(idp_type: IdpType, requst: HttpRequest) -> HttpResponse {
-    let result = match idp_type {
+pub async fn authorize(flow: &Flow, requst: HttpRequest) -> HttpResponse {
+    match flow.params.connection {
         IdpType::GitHub => {
             let github = GithubBuilder::default()
                 .state(requst.app_data::<GitHubState>().unwrap().to_owned())
                 .build()
                 .unwrap();
-            github.login()
+            github.authentication(flow)
         }
 
         IdpType::Google => {
             let google = Google {};
-            google.login()
+            google.authentication(flow)
         }
         IdpType::WeChat => {
-            let wechat = WeChat {};
-            wechat.login()
+            let wechat: WeChat = WeChat {};
+            wechat.authentication(flow)
         }
         IdpType::Tencent => {
             let tencent = Tencent {};
-            tencent.login()
+            tencent.authentication(flow)
         }
     };
-    HttpResponse::Found()
-        .append_header((header::LOCATION, result.to_string()))
-        .finish()
+    flow.next_uri()
 }

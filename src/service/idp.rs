@@ -1,8 +1,8 @@
+use crate::dto::auth::Flow;
 use serde::{Deserialize, Serialize};
-
 pub trait IdentifyProvider {
-    fn authentication(&self) -> String;
-    fn login(&self) -> String;
+    fn authentication(&self, flow: &Flow);
+    fn login(&self, flow: &Flow);
     fn userinfo(&self) -> String;
 }
 

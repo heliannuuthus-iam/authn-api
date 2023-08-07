@@ -1,8 +1,7 @@
+use crate::dto::auth::Flow;
 use crate::plugins::github::GitHubState;
 use crate::service::idp::IdentifyProvider;
-use actix_web::HttpResponse;
 use derive_builder::Builder;
-use http::header;
 use oauth2::{CsrfToken, PkceCodeChallenge, Scope};
 
 #[derive(Builder)]
@@ -11,7 +10,7 @@ pub struct Github {
 }
 
 impl IdentifyProvider for Github {
-    fn authentication(&self) -> String {
+    fn authentication(&self, flow: &Flow) {
         let (pkce_code_challenge, _pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
         let (auth_url, _csrf_token) = self
             .state
@@ -21,12 +20,9 @@ impl IdentifyProvider for Github {
             .add_scope(Scope::new("user:email".to_string()))
             .set_pkce_challenge(pkce_code_challenge)
             .url();
-        String::from("value")
     }
 
-    fn login(&self) -> String {
-        String::from("value")
-    }
+    fn login(&self, flow: &Flow) {}
 
     fn userinfo(&self) -> String {
         let (pkce_code_challenge, _pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
