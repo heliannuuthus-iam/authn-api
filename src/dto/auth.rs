@@ -36,7 +36,10 @@ impl Flow {
 
             _ => {
                 if (self.code.is_server_error()) {
-                    self.error = Erorr::UnAuthentication { code: (Http), msg: () }
+                    self.error = Erorr::UnAuthentication {
+                        code: (Http),
+                        msg: (),
+                    }
                 }
             }
         }
