@@ -46,6 +46,15 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v3
+      - name: container meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,enable=${{ github.ref == format('refs/heads/{0}', 'master') }},pattern={{version}}-${{ github.event.repository.updated_at }}rc-${{ github.event.pull_request.head.sha }}
+            type=semver,enable=${{ github.ref != format('refs/heads/{0}', 'master') }},pattern={{version}}-${{ github.event.repository.updated_at }}alpha-${{ github.event.pull_request.head.sha }}
+
       - name: authentication
         uses: docker/login-action@v2
         with:
@@ -59,10 +68,9 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-
       - name: push
         uses: docker/build-push-action@v4
         with:
           context: .
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
