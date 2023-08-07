@@ -15,9 +15,6 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Docker
-        uses: docker/setup-docker@v1
-
       - name: setup
         uses: actions-rs/toolchain@v1
         with:

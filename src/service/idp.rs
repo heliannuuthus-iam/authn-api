@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub trait IdentifyProvider {
+    fn authentication(&self) -> String;
     fn login(&self) -> String;
     fn userinfo(&self) -> String;
 }
@@ -14,7 +15,10 @@ pub enum IdpType {
     #[serde(rename = "wechat")]
     WeChat,
     #[serde(rename = "qq")]
-    QQ,
+    Tencent,
 }
 
-mod github;
+pub mod github;
+pub mod google;
+pub mod tencent;
+pub mod wechat;

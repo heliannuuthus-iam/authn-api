@@ -1,7 +1,7 @@
-use reqwest::{Client, ClientBuilder};
-use std::{ io, time::Duration};
-use thiserror;
 use lazy_static::lazy_static;
+use reqwest::{Client, ClientBuilder};
+use std::{io, time::Duration};
+use thiserror;
 #[derive(Debug, thiserror::Error)]
 pub enum Error<T>
 where
@@ -16,7 +16,6 @@ where
     #[error("request failed: {}", _0)]
     Other(String),
 }
-
 
 lazy_static! {
     pub static ref WEB_CLIENT: Client = client();

@@ -31,7 +31,8 @@ pub struct OauthGithubConfig {
 
 pub fn global_config() -> Config {
     let config_content =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("config.toml")).expect("config.toml is nonexistent");
-    
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("config.toml"))
+            .expect("config.toml is nonexistent");
+
     toml::from_str(config_content.as_str()).unwrap()
 }
