@@ -5,7 +5,7 @@ on:
     types:
       - opened
       - synchronize
-      
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -14,9 +14,6 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Docker
-        uses: docker/setup-docker@v1
-
       - name: setup
         uses: actions-rs/toolchain@v1
         with:
