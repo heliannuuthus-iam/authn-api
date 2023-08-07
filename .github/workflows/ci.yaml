@@ -20,12 +20,14 @@ jobs:
       - run: cargo fmt --all -- --check
 
   build:
+    needs: format
     runs-on: ubuntu-latest
     steps:
       - run: cargo build --verbose
       - run: cargo test --verbose
 
   containeraized:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
