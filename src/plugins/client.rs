@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use reqwest::{Client, ClientBuilder};
-use std::{ io, time::Duration};
+use std::{io, time::Duration};
 use thiserror;
 
 #[derive(Debug, thiserror::Error)]
