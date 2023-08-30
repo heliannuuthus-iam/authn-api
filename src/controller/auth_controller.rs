@@ -1,11 +1,12 @@
-use crate::dto::auth::{Flow, Params};
-use crate::plugins::oauth;
-use crate::plugins::{github::GitHubState, oauth::AuthRequest};
-use crate::service::auth_service;
-use crate::service::idp::IdpType;
 use actix_web::{get, post, routes, web, HttpRequest, HttpResponse, Responder};
 use http::header;
 use oauth2::{AuthorizationCode, TokenResponse};
+
+use crate::{
+    dto::auth::{Flow, Params},
+    plugins::{github::GitHubState, oauth, oauth::AuthRequest},
+    service::{auth_service, idp::IdpType},
+};
 
 #[routes]
 #[post("/authorize")]

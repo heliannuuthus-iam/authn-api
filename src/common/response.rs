@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use actix_web::{body, http::header::ContentType, HttpResponse, Responder};
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Serialize)]
 pub enum RespStatus {

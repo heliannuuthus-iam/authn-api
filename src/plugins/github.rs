@@ -1,5 +1,6 @@
-use crate::common::config::{self, OauthGithubConfig};
 use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenUrl};
+
+use crate::common::config::{self, OauthGithubConfig};
 
 #[derive(Clone, Debug)]
 pub struct GitHubState {

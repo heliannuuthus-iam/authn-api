@@ -1,71 +1,26 @@
-name: CI
+name: ci
 
-on:
+on: 
   pull_request:
-    types:
-      - opened
-      - synchronize
+    types: [opened, reopened, synchronize]
 
 jobs:
-  format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: update
-        run: rustup update stable && rustup default stable
-      - name: cache
-        id: cache-primes
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: checkout
-        run: cargo fmt --all --check
-      - uses: actions/upload-artifact@v3
-        with:
-          path: .
+  lint:
+    uses: heliannuuthus/workflow/.github/workflows/call-rust-lint.yml@master
+    with:
+      clippy: false
+  
 
   build:
-    needs: format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: cargo build --verbose
-      - run: cargo test --verbose
+    needs: lint
+    uses: heliannuuthus/workflow/.github/workflows/call-rust-build.yml@master
+
 
   containeraized:
     needs: build
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    steps:
-      - uses: actions/checkout@v3
-      - name: container meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,enable=${{ github.ref == format('refs/heads/{0}', 'master') }},pattern={{version}}-${{ github.event.repository.updated_at }}rc-${{ github.event.pull_request.head.sha }}
-            type=semver,enable=${{ github.ref != format('refs/heads/{0}', 'master') }},pattern={{version}}-${{ github.event.repository.updated_at }}alpha-${{ github.event.pull_request.head.sha }}
-
-      - name: authentication
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    uses: heliannuuthus/workflow/.github/workflows/call-containerize.yml@master
+    with:
+      version: ${{ needs.build.outputs.version }}
