@@ -637,7 +637,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "forum-server"
+name = "forum-api"
 version = "0.1.0"
 dependencies = [
  "actix-web",
