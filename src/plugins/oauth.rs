@@ -1,6 +1,7 @@
-use crate::plugins::client::{Error, WEB_CLIENT};
 use oauth2::{HttpRequest, HttpResponse};
 use serde::Deserialize;
+
+use crate::plugins::client::{Error, WEB_CLIENT};
 
 #[derive(Deserialize)]
 pub struct AuthRequest {

@@ -1,5 +1,4 @@
-use crate::dto::auth::Flow;
-use crate::service::idp::IdentifyProvider;
+use crate::{dto::auth::Flow, service::idp::IdentifyProvider};
 pub struct Google {}
 
 impl IdentifyProvider for Google {

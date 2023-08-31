@@ -1,8 +1,7 @@
-use crate::dto::auth::Flow;
-use crate::plugins::github::GitHubState;
-use crate::service::idp::IdentifyProvider;
 use derive_builder::Builder;
 use oauth2::{CsrfToken, PkceCodeChallenge, Scope};
+
+use crate::{dto::auth::Flow, plugins::github::GitHubState, service::idp::IdentifyProvider};
 
 #[derive(Builder)]
 pub struct Github {
