@@ -4,8 +4,6 @@ use actix_web::{
 };
 use chrono::{DateTime, Utc};
 use http::Uri;
-use num_bigint::BigUint;
-use ring::rand::SecureRandom;
 use tracing::error;
 use validator::Validate;
 
@@ -14,6 +12,7 @@ use crate::{
         cache::{cache_get, cache_setex},
         errors::{ApiError, Result},
         oauth::{AuthCodeResponse, IdpType, OAuthUser},
+        utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
 };
@@ -69,11 +68,7 @@ pub struct Flow {
 
 impl Flow {
     pub fn gen_id() -> String {
-        let system_random = ring::rand::SystemRandom::new();
-        let mut res = vec![0; 24];
-        system_random.fill(&mut res).unwrap();
-        let big_int = BigUint::parse_bytes(&res, 10);
-        String::from_utf8(big_int.unwrap().to_radix_be(62)).unwrap_or_default()
+        gen_id(24)
     }
 
     pub fn new(params: Params) -> Self {

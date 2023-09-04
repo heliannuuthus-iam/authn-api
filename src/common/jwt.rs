@@ -5,10 +5,14 @@ use chrono::{
     DateTime, Duration, Utc,
 };
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use openssl::nid::Nid;
+use openssl::error::ErrorStack;
 use ring::{
+    error::KeyRejected,
     rand::{SecureRandom, SystemRandom},
-    signature::Ed25519KeyPair,
+    signature::{
+        EcdsaKeyPair, EcdsaSigningAlgorithm, Ed25519KeyPair, KeyPair, RsaKeyPair,
+        ECDSA_P256_SHA256_ASN1_SIGNING, ECDSA_P384_SHA384_ASN1_SIGNING,
+    },
 };
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter};
@@ -16,9 +20,9 @@ use strum::{AsRefStr, EnumIter};
 use super::utils::gen_id;
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Claims {
-    sub: Option<String>,
-    iss: Option<String>,
-    aud: Vec<String>,
+    pub sub: Option<String>,
+    pub iss: Option<String>,
+    pub aud: Vec<String>,
     #[serde(
         serialize_with = "serialize_to_ts",
         deserialize_with = "deserialize_to_ts"
@@ -46,58 +50,131 @@ impl Claims {
     }
 }
 
-pub struct JwKPair<'a> {
-    alg: &'a Algorithm,
+pub struct JwKPair {
+    alg: JwtAlgorithm,
     inner: Vec<u8>,
 }
 
-impl<'a> JwKPair<'a> {
-    pub fn new(alg: &'a Algorithm, inner: Vec<u8>) -> Self {
+impl JwKPair {
+    pub fn new(alg: JwtAlgorithm, inner: Vec<u8>) -> Self {
         JwKPair { alg, inner }
+    }
+    pub fn export_alg(&self) -> Result<jsonwebtoken::Algorithm> {
+        jsonwebtoken::Algorithm::from_str(self.alg.as_ref()).map_err(|e| {
+            JwtErorr::UnSupported(format!(
+                "export alg {} field failed: {}",
+                self.alg.as_ref(),
+                e
+            ))
+        })
+    }
+
+    pub fn export_prikey(&self) -> Vec<u8> {
+        self.inner.clone()
+    }
+
+    pub fn export_pubkey(&self) -> Result<Vec<u8>> {
+        Ok(match &self.alg.variant() {
+            JwtAlgorithmVariant::Hmac => self.inner.clone(),
+            JwtAlgorithmVariant::Rsa => RsaKeyPair::from_der(&self.inner)?
+                .public_key()
+                .as_ref()
+                .to_vec(),
+
+            JwtAlgorithmVariant::Ec => EcdsaKeyPair::from_pkcs8(
+                JwtAlgorithm::compute_ecdsa_algorithm(&self.alg)?,
+                &self.inner,
+            )?
+            .public_key()
+            .as_ref()
+            .to_vec(),
+            JwtAlgorithmVariant::Ed => ring::signature::Ed25519KeyPair::from_pkcs8(&self.inner)?
+                .public_key()
+                .as_ref()
+                .to_vec(),
+        })
     }
 }
 
-impl<'a> JwKPair<'a> {
-    pub fn export_alg(&self) -> Result<jsonwebtoken::Algorithm> {
-        match self.alg {
-            Algorithm::ED => Ok(jsonwebtoken::Algorithm::EdDSA),
-            _ => {
-                let mut alg = self.alg.as_ref().to_string();
-                alg.push_str(self.inner.len().to_string().as_str());
-                Ok(
-                    jsonwebtoken::Algorithm::from_str(alg.as_str()).map_err(|_| {
-                        JwtErorr::UnSupported(format!("export {} ed field failed", alg))
-                    })?,
-                )
-            }
-        }
-    }
+pub enum JwtAlgorithmVariant {
+    Hmac,
+    Rsa,
+    Ec,
+    Ed,
 }
 
 #[derive(EnumIter, AsRefStr, Debug, PartialEq)]
-pub enum Algorithm {
-    #[strum(serialize = "AES")]
-    Aes,
-    #[strum(serialize = "RSA")]
-    Rsa,
-    #[strum(serialize = "EC")]
-    EC,
-    #[strum(serialize = "PS")]
-    PS,
-    #[strum(serialize = "ED")]
-    ED,
+pub enum JwtAlgorithm {
+    HS256,
+    HS384,
+    HS512,
+
+    ES256,
+    ES384,
+
+    RS256,
+    RS384,
+    RS512,
+
+    PS256,
+    PS384,
+    PS512,
+
+    EdDSA,
+}
+
+impl JwtAlgorithm {
+    pub fn variant(&self) -> JwtAlgorithmVariant {
+        match self {
+            JwtAlgorithm::HS256 | JwtAlgorithm::HS384 | JwtAlgorithm::HS512 => {
+                JwtAlgorithmVariant::Hmac
+            }
+            JwtAlgorithm::ES256 | JwtAlgorithm::ES384 => JwtAlgorithmVariant::Ec,
+            JwtAlgorithm::RS256
+            | JwtAlgorithm::RS384
+            | JwtAlgorithm::RS512
+            | JwtAlgorithm::PS256
+            | JwtAlgorithm::PS384
+            | JwtAlgorithm::PS512 => JwtAlgorithmVariant::Rsa,
+            JwtAlgorithm::EdDSA => JwtAlgorithmVariant::Ed,
+        }
+    }
+    pub fn size(&self) -> Option<u32> {
+        match self {
+            JwtAlgorithm::HS256 | JwtAlgorithm::ES256 => Some(256u32),
+            JwtAlgorithm::HS384 | JwtAlgorithm::ES384 => Some(384u32),
+            JwtAlgorithm::HS512 => Some(512u32),
+            JwtAlgorithm::RS256 | JwtAlgorithm::PS256 => Some(2048u32),
+            JwtAlgorithm::RS384 | JwtAlgorithm::PS384 => Some(3072u32),
+            JwtAlgorithm::RS512 | JwtAlgorithm::PS512 => Some(4096u32),
+            JwtAlgorithm::EdDSA => None, // No specific size for EdDSA
+        }
+    }
+
+    pub fn compute_ecdsa_algorithm(alg: &JwtAlgorithm) -> Result<&'static EcdsaSigningAlgorithm> {
+        match alg {
+            JwtAlgorithm::ES256 => Ok(&ECDSA_P256_SHA256_ASN1_SIGNING),
+            JwtAlgorithm::ES384 => Ok(&ECDSA_P384_SHA384_ASN1_SIGNING),
+            _ => Err(JwtErorr::UnSupported(format!(
+                "unsupported alg({:?}) to ecdsa",
+                alg
+            ))),
+        }
+    }
 }
 
 type Result<T> = std::result::Result<T, JwtErorr>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum JwtErorr {
-    #[error("kid is nonexistant")]
-    NotFoundKid,
     #[error("unsupported {0}")]
     UnSupported(String),
     #[error("generate {alg} failed({stage})")]
     KeyGenErorr { alg: String, stage: String },
+    #[error("openssl key format error")]
+    ErrorStack(#[from] ErrorStack),
+    #[error("ed key format error")]
+    KeyRejected(#[from] KeyRejected),
     #[error("verify jwt error {0}")]
     VerifyError(String),
     #[error("sign token erorr {0}")]
@@ -105,18 +182,19 @@ pub enum JwtErorr {
 }
 
 // 根据指定的算法生成一个 Key, ed 相关没有
-pub fn genrate_key(alg: &Algorithm, size: usize) -> Result<JwKPair> {
-    let secret = match alg {
-        Algorithm::Aes => {
+pub fn genrate_key(alg: JwtAlgorithm) -> Result<JwKPair> {
+    let size = alg.size().unwrap_or_default();
+    let secret = match alg.variant() {
+        JwtAlgorithmVariant::Hmac => {
             let rng = SystemRandom::new();
-            let mut dest = vec![0; size / 8];
+            let mut dest = vec![0; (size / 8) as usize];
             rng.fill(&mut dest).map_err(|_e| JwtErorr::KeyGenErorr {
                 alg: alg.as_ref().to_string(),
                 stage: String::from("filling"),
             })?;
             dest
         }
-        Algorithm::Rsa | Algorithm::PS => openssl::rsa::Rsa::generate((size * 8) as u32)
+        JwtAlgorithmVariant::Rsa => openssl::rsa::Rsa::generate(size)
             .map_err(|_| JwtErorr::KeyGenErorr {
                 alg: alg.as_ref().to_string(),
                 stage: String::from("generate"),
@@ -126,30 +204,17 @@ pub fn genrate_key(alg: &Algorithm, size: usize) -> Result<JwKPair> {
                 alg: alg.as_ref().to_string(),
                 stage: String::from("fromat"),
             })?,
-        Algorithm::EC => {
-            let curve_name = match size {
-                256 => Nid::X9_62_PRIME256V1,
-                384 => Nid::SECP384R1,
-                512 => Nid::SECP521R1,
-                _ => {
-                    return Err(JwtErorr::UnSupported(format!(
-                        "unsupported ec algorithm block size({size})"
-                    )))?
-                }
-            };
-            let curve_group = openssl::ec::EcGroup::from_curve_name(curve_name).unwrap();
-            openssl::ec::EcKey::generate(&curve_group)
-                .map_err(|_| JwtErorr::KeyGenErorr {
-                    alg: alg.as_ref().to_string(),
-                    stage: String::from("generate"),
-                })?
-                .private_key_to_der()
-                .map_err(|_| JwtErorr::KeyGenErorr {
-                    alg: alg.as_ref().to_string(),
-                    stage: String::from("format"),
-                })?
-        }
-        Algorithm::ED => Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())
+        JwtAlgorithmVariant::Ec => EcdsaKeyPair::generate_pkcs8(
+            JwtAlgorithm::compute_ecdsa_algorithm(&alg)?,
+            &SystemRandom::new(),
+        )
+        .map_err(|_e| JwtErorr::KeyGenErorr {
+            alg: alg.as_ref().to_string(),
+            stage: String::from("generate"),
+        })?
+        .as_ref()
+        .to_vec(),
+        JwtAlgorithmVariant::Ed => Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())
             .map_err(|_| JwtErorr::KeyGenErorr {
                 alg: alg.as_ref().to_string(),
                 stage: String::from("generate"),
@@ -162,15 +227,15 @@ pub fn genrate_key(alg: &Algorithm, size: usize) -> Result<JwKPair> {
 
 pub fn generate_jws(claims: &Claims, secret: &JwKPair) -> Result<String> {
     let mut headers = jsonwebtoken::Header::new(secret.export_alg()?);
-    let encoding_key = match secret.alg {
-        Algorithm::Aes => EncodingKey::from_secret(&secret.inner),
-        Algorithm::Rsa | Algorithm::PS => EncodingKey::from_rsa_der(&secret.inner),
-        Algorithm::EC => EncodingKey::from_ec_der(&secret.inner),
-        Algorithm::ED => EncodingKey::from_ed_der(&secret.inner),
+    let encoding_key = match secret.alg.variant() {
+        JwtAlgorithmVariant::Hmac => EncodingKey::from_secret(&secret.export_prikey()),
+        JwtAlgorithmVariant::Rsa => EncodingKey::from_rsa_der(&secret.export_prikey()),
+        JwtAlgorithmVariant::Ec => EncodingKey::from_ec_der(&secret.export_prikey()),
+        JwtAlgorithmVariant::Ed => EncodingKey::from_ed_der(&secret.export_prikey()),
     };
     headers.kid = Some(gen_id(16));
     jsonwebtoken::encode(&headers, claims, &encoding_key)
-        .map_err(|_| JwtErorr::SignError(format!("generate jws failed")))
+        .map_err(|e| JwtErorr::SignError(format!("generate jws failed: {}", e)))
 }
 
 pub fn verify_jws(
@@ -178,11 +243,11 @@ pub fn verify_jws(
     secret: &JwKPair,
     validation: jsonwebtoken::Validation,
 ) -> Result<Claims> {
-    let decoding_key = match secret.alg {
-        Algorithm::Aes => DecodingKey::from_secret(&secret.inner),
-        Algorithm::Rsa | Algorithm::PS => DecodingKey::from_rsa_der(&secret.inner),
-        Algorithm::EC => DecodingKey::from_ec_der(&secret.inner),
-        Algorithm::ED => DecodingKey::from_ed_der(&secret.inner),
+    let decoding_key = match secret.alg.variant() {
+        JwtAlgorithmVariant::Hmac => DecodingKey::from_secret(&secret.export_pubkey()?),
+        JwtAlgorithmVariant::Rsa => DecodingKey::from_rsa_der(&secret.export_pubkey()?),
+        JwtAlgorithmVariant::Ec => DecodingKey::from_ec_der(&secret.export_pubkey()?),
+        JwtAlgorithmVariant::Ed => DecodingKey::from_ed_der(&secret.export_pubkey()?),
     };
 
     let jsonwebtoken::TokenData { header: _, claims } =
@@ -190,4 +255,10 @@ pub fn verify_jws(
             .map_err(|e| JwtErorr::VerifyError(format!("{}", e)))?;
 
     Ok(claims)
+}
+
+pub fn validation(key: &JwKPair, audience: Vec<String>) -> Result<jsonwebtoken::Validation> {
+    let mut validation = jsonwebtoken::Validation::new(key.export_alg()?);
+    validation.set_audience(&audience);
+    Ok(validation)
 }

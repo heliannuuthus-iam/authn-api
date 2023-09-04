@@ -4,6 +4,6 @@ mod flow_test {
     #[test]
     fn test_gen_id() {
         let id = Flow::gen_id();
-        assert_eq!(id.len(), 32);
+        assert_eq!(id.len(), 24);
     }
 }
