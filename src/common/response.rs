@@ -43,12 +43,13 @@ impl Resp<()> {
         Self::new(RespStatus::Success, "success".to_string(), None)
     }
 }
+
 impl<T> Resp<T> {
     pub fn new(code: RespStatus, message: String, data: Option<T>) -> Resp<T> {
         Resp {
-            code: code,
+            code,
             message: Some(message),
-            data: data,
+            data,
         }
     }
 

@@ -1,27 +1,48 @@
-use actix_web::{web::Data, App, HttpServer};
+extern crate core;
+
+use actix_web::{App, HttpServer};
+use common::config::env_var;
+use dotenvy::dotenv;
+use tracing_actix_web::TracingLogger;
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+
+use crate::common::nacos::init_nacos;
+
 mod common;
 mod controller;
 mod dto;
-mod plugins;
+mod rpc;
 mod service;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let config: common::config::Config = common::config::global_config();
-    let server_config = config.server.unwrap();
-    let oauth_config = config.oauth.unwrap();
-    let github_state = plugins::github::github_oauth_state(oauth_config.github.unwrap());
-    let ip: &str = server_config.ip.as_ref().expect("Invalid ip config");
-    let port = server_config.port.expect("Invalid port config");
-    std::env::set_var("RUST_LOG", "debug");
-    env_logger::init();
+    dotenv().expect(".env file not found");
+    let file_appender =
+        tracing_appender::rolling::hourly("./log", format!("{}.log", env!("CARGO_PKG_NAME")));
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let _ = tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt::Subscriber::builder()
+            .with_max_level(tracing::Level::INFO)
+            .finish()
+            .with(tracing_subscriber::fmt::Layer::default().with_writer(non_blocking)),
+    );
+    init_nacos().await;
     HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(github_state.clone()))
-            .service(controller::auth_controller::login)
-            .service(controller::auth_controller::authorize)
-            .service(controller::auth_controller::callback)
+            .wrap(TracingLogger::default())
+            .service(controller::authorize_controller::query_authorize)
+            .service(controller::authorize_controller::form_authorize)
+            .service(controller::authenticate_controller::pre_form_login)
+            .service(controller::authenticate_controller::pre_query_login)
+            .service(controller::authenticate_controller::query_login)
+            .service(controller::authenticate_controller::form_login)
+            .service(controller::authenticate_controller::oauth_login)
+            .service(controller::authenticate_controller::callback)
     })
-    .bind((ip, port))?
+    .bind((
+        env_var::<String>("SERVER_HOST"),
+        env_var::<u16>("SERVER_PORT"),
+    ))?
     .run()
     .await
 }
