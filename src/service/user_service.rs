@@ -5,7 +5,7 @@ use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::{
     common::{
-        cache::{cache_get, cache_setex},
+        cache::redis::{redis_get, redis_setex},
         client::REQWEST,
         errors::{ApiError, Result},
         nacos::rpc,
@@ -39,7 +39,7 @@ pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)>
     })?;
     let server_verifier: SrpServerVerifier =
         srp_server.process_reply(&b, &verifier, &a_pub).unwrap();
-    cache_setex(
+    redis_setex(
         format!("forum:auth:srp:{i}").as_str(),
         server_verifier,
         Duration::minutes(1),
@@ -53,7 +53,7 @@ pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)>
 
 pub async fn srp_login(identifier: &str, m1: &str) -> Result<()> {
     let server_verifier =
-        cache_get::<SrpServerVerifier>(format!("forum:auth:srp:{identifier}").as_str())
+        redis_get::<SrpServerVerifier>(format!("forum:auth:srp:{identifier}").as_str())
             .await?
             .ok_or(ApiError::BadRequestError(format!("pre login first")))?;
     let m1 = hex::decode(m1).with_context(|| {

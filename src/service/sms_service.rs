@@ -6,12 +6,15 @@ use lettre::{
 };
 
 use crate::{
-    common::{client::REQWEST, config::env_var, errors::Result, nacos::NACOS_CLIENT},
+    common::{
+        client::REQWEST,
+        config::env_var,
+        constant::{FORUM_SERVER, FORUM_SERVER_CLUSTER},
+        errors::Result,
+        nacos::NACOS_CLIENT,
+    },
     dto::sms::{SmsConfig, SmsContext},
 };
-
-const FORUM_SERVER: &str = "forum-server";
-const FORUM_SERVER_CLUSTER: &str = "default";
 
 async fn get_sms_config(sms_temp_id: i64) -> Result<SmsConfig> {
     let server = NACOS_CLIENT

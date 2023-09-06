@@ -3,11 +3,9 @@ use reqwest::{Request, RequestBuilder, Response};
 use tracing::info;
 
 use crate::{
-    common::{client::REQWEST, errors::Result, nacos::rpc},
+    common::{client::REQWEST, constant::FORUM_SERVER, errors::Result, nacos::rpc},
     dto::user::SubjectProfile,
 };
-
-const FORUM_SERVER: &str = "forum-server";
 
 pub async fn registry() -> Result<()> {
     RequestBuilder::from_parts(

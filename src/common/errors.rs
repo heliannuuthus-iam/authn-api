@@ -23,7 +23,7 @@ pub enum ConfigError {
 pub enum ApiError {
     #[error("BadRequest {0}")]
     BadRequestError(String),
-    #[error("Unfulfilled identify {0}")]
+    #[error("{0}")]
     Unauthenticated(String),
     #[error("Unallowable scope {0}")]
     Forbidden(String),

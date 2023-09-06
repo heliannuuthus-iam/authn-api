@@ -5,8 +5,8 @@ use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, 
 
 use crate::{
     common::{
-        cache::{cache_get, cache_setex},
-        errors::Result,
+        cache::redis::{redis_get, redis_setex},
+        errors::{ApiError, Result},
         oauth::{async_http_client, select_connection_client},
     },
     dto::{
@@ -28,7 +28,7 @@ pub async fn oauth_login(flow: &Flow) -> Result<String> {
         .add_scopes(scopes)
         .url();
     // 将 pkce code 存入缓存中
-    cache_setex(
+    redis_setex(
         format!("forum:oauth:pkce:{}", csrf_token.secret()).as_str(),
         pkce_code_verifier.secret(),
         Duration::minutes(10),
@@ -40,7 +40,7 @@ pub async fn oauth_login(flow: &Flow) -> Result<String> {
 // oauth callback
 pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Result<()> {
     let mut client = select_connection_client(&flow.params.connection)?;
-    let code_verifier = cache_get::<PkceCodeVerifier>(
+    let code_verifier = redis_get::<PkceCodeVerifier>(
         format!(
             "forum:oauth:pkce:{}",
             flow.code_resp.as_ref().unwrap().state
@@ -86,4 +86,13 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
     flow.stage = FlowStage::Authenticating;
 
     Ok(())
+}
+
+pub async fn validate_flow(flow: &Flow) -> Result<()> {
+    let redirect_url = &flow.client_config.as_ref().unwrap().client.redirect_url;
+    if !redirect_url.contains(&flow.params.redirect_uri) {
+        return Err(ApiError::Unauthenticated(format!("invalid_redirect_url")));
+    } else {
+        Ok(())
+    }
 }

@@ -9,13 +9,15 @@ use validator::Validate;
 
 use crate::{
     common::{
-        cache::{cache_get, cache_setex},
+        cache::redis::{redis_get, redis_setex},
         errors::{ApiError, Result},
         oauth::{AuthCodeResponse, IdpType, OAuthUser},
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
 };
+
+use super::client::{ClientConfig, ClientIdpConfig};
 
 #[derive(Debug, Clone, thiserror::Error, serde::Deserialize, serde::Serialize)]
 pub enum AuthError {
@@ -54,8 +56,8 @@ pub enum FlowStage {
 pub struct Flow {
     pub id: String,
     pub params: Params,
+    pub client_config: Option<ClientIdpConfig>,
     pub code_resp: Option<AuthCodeResponse>,
-    pub redirect_url: Option<String>,
     pub current: Option<UserProfile>,
     pub subject: Option<UserProfile>,
     pub oauth_user: Option<OAuthUser>,
@@ -160,7 +162,7 @@ pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
         )))
         .map(|c| c.value().to_owned())?;
 
-    cache_get::<Flow>(format!("forum:auth:flow:{}", session).as_str())
+    redis_get::<Flow>(format!("forum:auth:flow:{}", session).as_str())
         .await
         .map_err(|_| ApiError::PreconditionFailed("session is nonexsistent".to_string()))?
         .ok_or(ApiError::PreconditionFailed(
@@ -183,7 +185,7 @@ async fn persist_flow(flow: &'_ Flow) -> Result<&'_ Flow> {
             "session is expired".to_string(),
         ))?
     } else {
-        cache_setex(
+        redis_setex(
             format!("forum:auth:flow:{}", flow.id).as_str(),
             flow,
             now - flow.expires_at,

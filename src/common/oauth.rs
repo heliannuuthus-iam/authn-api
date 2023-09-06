@@ -17,7 +17,7 @@ mod google;
 
 lazy_static::lazy_static! {
     pub static ref GITHUB_CLIENT: GitHubClient = GitHubClient::new();
-    pub  static  ref  GOOGLE_CLIENT: GoogleClient = GoogleClient::new();
+    pub static ref  GOOGLE_CLIENT: GoogleClient = GoogleClient::new();
 }
 
 #[derive(Serialize, Deserialize, Debug)]
