@@ -1,4 +1,5 @@
 use actix_web::{
+    error::ErrorBadRequest,
     http::{header::ContentType, StatusCode},
     ResponseError,
 };
@@ -21,21 +22,8 @@ pub enum ConfigError {
 
 #[derive(Debug, Error)]
 pub enum ApiError {
-    #[error("BadRequest {0}")]
-    BadRequestError(String),
     #[error("{0}")]
-    Unauthenticated(String),
-    #[error("Unallowable scope {0}")]
-    Forbidden(String),
-    #[error("Unknown information {0}")]
-    NotFount(String),
-    #[error("Not access {0}")]
-    NotAccessible(String),
-    #[error("Precondition failed {0}")]
-    PreconditionFailed(String),
-    #[error("Unprocessable content {0}")]
-    UnprocessableEntity(String),
-    // other from error
+    ResponseError(#[from] actix_web::Error),
     #[error("internal config error {0}")]
     InternalConfigError(#[from] ConfigError),
     #[error("an unspecified internal error occurred {0}")]
@@ -54,20 +42,13 @@ impl From<ValidationErrors> for ApiError {
         for (field, error) in value.errors() {
             msg.push_str(format!("{field}: {:?}", error).as_str())
         }
-        ApiError::BadRequestError(msg)
+        ApiError::ResponseError(ErrorBadRequest(msg))
     }
 }
 
 impl ResponseError for ApiError {
     fn status_code(&self) -> http::StatusCode {
         match self {
-            ApiError::BadRequestError(_) => StatusCode::BAD_REQUEST,
-            ApiError::Unauthenticated(_) => StatusCode::UNAUTHORIZED,
-            ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
-            ApiError::NotFount(_) => StatusCode::NOT_FOUND,
-            ApiError::NotAccessible(_) => StatusCode::NOT_ACCEPTABLE,
-            ApiError::PreconditionFailed(_) => StatusCode::PRECONDITION_FAILED,
-            ApiError::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::InternalConfigError(e) => match e {
                 ConfigError::Reqwest(e) => e.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                 ConfigError::Redis(_) => StatusCode::INTERNAL_SERVER_ERROR,

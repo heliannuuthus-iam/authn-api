@@ -1,4 +1,4 @@
-use actix_web::HttpRequest;
+use actix_web::{HttpRequest, error::ErrorUnauthorized};
 use anyhow::Context;
 use chrono::Duration;
 use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, TokenResponse};
@@ -91,7 +91,7 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
 pub async fn validate_flow(flow: &Flow) -> Result<()> {
     let redirect_url = &flow.client_config.as_ref().unwrap().client.redirect_url;
     if !redirect_url.contains(&flow.params.redirect_uri) {
-        return Err(ApiError::Unauthenticated(format!("invalid_redirect_url")));
+        return Err(ApiError::ResponseError(ErrorUnauthorized("invalid_redirect_url")));
     } else {
         Ok(())
     }

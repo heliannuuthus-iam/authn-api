@@ -1,3 +1,4 @@
+use actix_web::error::{ErrorUnauthorized, ErrorBadRequest};
 use anyhow::Context;
 use chrono::Duration;
 use http::{method, StatusCode};
@@ -10,19 +11,20 @@ use crate::{
         errors::{ApiError, Result},
         nacos::rpc,
         srp::{
+            client::SrpClient,
             groups::G_2048,
             server::{SrpServer, SrpServerVerifier},
         },
     },
-    dto::srp::SrpPassword,
+    dto::password::SrpPassword,
+    rpc::password,
 };
 
 pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)> {
-    let srp_meta = &(fetch_srp(i)
-        .await?
-        .ok_or(ApiError::Unauthenticated(format!(
-            "srp meta is nonexistant"
-        )))?);
+    let srp_meta = match (i).await? {
+        Some(meta) => meta,
+        None => None,
+    };
 
     let srp_server = SrpServer::new(&G_2048);
     let rng = SystemRandom::new();
@@ -55,32 +57,19 @@ pub async fn srp_login(identifier: &str, m1: &str) -> Result<()> {
     let server_verifier =
         redis_get::<SrpServerVerifier>(format!("forum:auth:srp:{identifier}").as_str())
             .await?
-            .ok_or(ApiError::BadRequestError(format!("pre login first")))?;
+            .ok_or(ApiError::ResponseError(ErrorBadRequest("pre login first")))?;
     let m1 = hex::decode(m1).with_context(|| {
         tracing::error!("client m1 decode failed");
         format!("client m1 decode failed")
     })?;
     server_verifier.verify_client(&m1).map_err(|e| {
         tracing::error!("verify client m1 failed, {:?}", e);
-        ApiError::Unauthenticated(format!("verify failed"))
+        ApiError::ResponseError(ErrorUnauthorized("verify failed"))
     })?;
     Ok(())
 }
 
-async fn fetch_srp(i: &str) -> Result<Option<SrpPassword>> {
-    let resp = REQWEST
-        .execute(reqwest::Request::new(
-            method::Method::GET,
-            rpc(format!("http://forum-server/users/rsp/{}", i).as_str()).await?,
-        ))
-        .await
-        .with_context(|| {
-            tracing::error!("【获取 srp 数据失败】 identifier({:?})", i);
-            format!("fetch user srp data failed")
-        })?;
-    if resp.status() == StatusCode::NOT_FOUND {
-        Ok(None)
-    } else {
-        Ok(resp.json::<SrpPassword>().await.ok())
-    }
+pub async fn create_srp(srp: &SrpPassword) -> Result<()> {
+    password::save_srp(srp).await?;
+    Ok(())
 }

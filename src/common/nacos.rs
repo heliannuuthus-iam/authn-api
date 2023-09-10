@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use actix_web::error::ErrorNotFound;
 use anyhow::Context;
 use nacos_sdk::api::{
     constants,
@@ -61,9 +62,9 @@ pub async fn init_nacos() {
 
 pub async fn rpc(uri: &str) -> Result<Url> {
     let mut url = Url::parse(uri).context("rpc uri parse failed")?;
-    let service_name = url
-        .host_str()
-        .ok_or(ApiError::NotFount(format!("service_name parse failed")))?;
+    let service_name = url.host_str().ok_or(ApiError::ResponseError(ErrorNotFound(
+        "service_name parse failed",
+    )))?;
     let instant = NACOS_CLIENT
         .select_one_healthy_instance(service_name.to_string(), None, Vec::default(), true)
         .await

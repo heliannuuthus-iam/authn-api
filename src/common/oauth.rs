@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use actix_web::error::ErrorBadRequest;
 use async_trait::async_trait;
 use oauth2::{
     basic::BasicClient, AuthUrl, ClientId, ClientSecret, HttpRequest, HttpResponse, RedirectUrl,
@@ -152,8 +153,8 @@ pub fn select_connection_client(idp_type: &IdpType) -> Result<Box<dyn OauthClien
     match idp_type {
         IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
         IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
-        _ => Err(ApiError::BadRequestError(format!(
+        _ => Err(ApiError::ResponseError(ErrorBadRequest(format!(
             "unknwon idp type({idp_type})"
-        ))),
+        )))),
     }
 }

@@ -33,7 +33,7 @@ async fn main() -> std::io::Result<()> {
             .service(controller::authorize_controller::query_authorize)
             .service(controller::authorize_controller::form_authorize)
             .service(controller::authenticate_controller::pre_form_login)
-            .service(controller::authenticate_controller::pre_query_login)
+            .service(controller::authenticate_controller::pre_login)
             .service(controller::authenticate_controller::query_login)
             .service(controller::authenticate_controller::form_login)
             .service(controller::authenticate_controller::oauth_login)
