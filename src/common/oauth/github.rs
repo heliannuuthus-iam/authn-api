@@ -7,7 +7,7 @@ use serde_json::Value;
 use tracing::error;
 
 use super::{OAuthUser, OauthClient};
-use crate::common::{client::REQWEST, errors::Result};
+use crate::common::{client::WEB_CLIENT, errors::Result};
 
 #[derive(Clone, Default)]
 pub struct GitHubClient {
@@ -31,7 +31,7 @@ impl GitHubClient {
     }
 
     async fn fetch_profile(&mut self, token: &str) -> Result<Option<OAuthUser>> {
-        Ok(REQWEST
+        Ok(WEB_CLIENT
             .get(self.profile_endpoint.to_string())
             .bearer_auth(token)
             .send()
@@ -61,7 +61,7 @@ impl GitHubClient {
     }
 
     async fn fetch_email(&mut self, token: &str) -> Result<(Value, bool)> {
-        let (email, verified) = REQWEST
+        let (email, verified) = WEB_CLIENT
             .get(format!(
                 "{}{}",
                 self.server_endpoint.to_string(),

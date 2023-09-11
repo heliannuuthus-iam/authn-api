@@ -1,5 +1,4 @@
 use actix_web::{
-    error::ErrorBadRequest,
     get, post,
     web::{Form, Json, Query},
     HttpRequest, HttpResponse, Responder,
@@ -7,10 +6,7 @@ use actix_web::{
 use http::{header, StatusCode};
 
 use crate::{
-    common::{
-        errors::{ApiError, Result},
-        oauth::AuthCodeResponse,
-    },
+    common::{errors::Result, oauth::AuthCodeResponse},
     dto::{
         auth::{validate_flow, ChallengeRequest},
         password::{PreSrpRequest, PreSrpRespose, SrpPassword, SrpRequest},
@@ -47,16 +43,14 @@ pub async fn challenge(Json(_c_req): Json<ChallengeRequest>) -> Result<impl Resp
 
 #[post("/registry")]
 pub async fn registry(Json(form): Json<SrpPassword>) -> Result<impl Responder> {
-    match user_service::create_srp(&form).await {
-        Ok(_) => Ok(HttpResponse::Ok().finish()),
-        Err(err) => ApiError::ResponseError(ErrorBadRequest("registry failed")),
-    }
+    user_service::create_srp(&form).await?;
+    Ok(HttpResponse::Ok().finish())
 }
 
 // commit identifier and A
 #[get("/login")]
 pub async fn pre_login(Query(query): Query<PreSrpRequest>) -> Result<impl Responder> {
-    let (salt, b_pub) = user_service::pre_srp_login(&form.identifier, &form.a_pub).await?;
+    let (salt, b_pub) = user_service::pre_srp_login(&query.identifier, &query.a_pub).await?;
     Ok(Json(PreSrpRespose { salt, b_pub }))
 }
 

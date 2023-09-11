@@ -48,3 +48,5 @@ openssl = "0.10.57"
 openssl-sys = "0.9.92"
 strum = { version = "0.25", features = ["derive"] }
 moka = { version = "0.12.0-beta.2", features = ["future"] }
+utoipa = { version = "3.5.0", features = ["actix_extras", "chrono"] }
+utoipa-redoc = { version = "0.1.0", features = ["actix-web"] }

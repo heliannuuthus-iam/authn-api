@@ -1,5 +1,6 @@
 use actix_web::{
     cookie::CookieBuilder,
+    error::ErrorUnauthorized,
     get,
     http::header,
     post,
@@ -10,8 +11,12 @@ use http::StatusCode;
 use validator::Validate;
 
 use crate::{
-    common::{errors::{Result, ApiError}, cache::moka::get_client_idp_config},
-    dto::auth::{Flow, Params}, service::auth_service,
+    common::{
+        cache::moka::get_client_idp_config,
+        errors::{ApiError, Result},
+    },
+    dto::auth::{Flow, Params},
+    service::auth_service,
 };
 #[get("/authorize")]
 pub async fn query_authorize(Query(params): web::Query<Params>) -> Result<impl Responder> {
@@ -31,12 +36,11 @@ async fn authorize(params: Params) -> Result<impl Responder> {
         Some(client) => {
             flow.client_config = Some(client);
             flow
-        },
-        None => return Err(ApiError::Unauthenticated("invalid_client".to_string())),
+        }
+        None => return Err(ApiError::ResponseError(ErrorUnauthorized("invalid_client"))),
     };
     // 参数校验
     auth_service::validate_flow(&flow).await?;
-
 
     Ok(HttpResponse::build(StatusCode::MOVED_PERMANENTLY)
         .append_header((header::LOCATION, flow.params.redirect_uri))

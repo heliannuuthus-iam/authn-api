@@ -1,5 +1,6 @@
 use actix_web::{
     cookie::{time::Duration, Cookie},
+    error::ErrorPreconditionFailed,
     HttpResponse,
 };
 use chrono::{DateTime, Utc};
@@ -7,6 +8,7 @@ use http::Uri;
 use tracing::error;
 use validator::Validate;
 
+use super::client::{ClientIdpConfig};
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
@@ -16,8 +18,6 @@ use crate::{
     },
     dto::user::{UserAssociation, UserProfile},
 };
-
-use super::client::{ClientConfig, ClientIdpConfig};
 
 #[derive(Debug, Clone, thiserror::Error, serde::Deserialize, serde::Serialize)]
 pub enum AuthError {
@@ -157,22 +157,22 @@ impl Flow {
 pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
     let session = req
         .cookie("auth_session")
-        .ok_or(ApiError::PreconditionFailed(format!(
-            "auth_session is lacked"
+        .ok_or(ApiError::ResponseError(ErrorPreconditionFailed(
+            "auth_session is lacked",
         )))
         .map(|c| c.value().to_owned())?;
 
     redis_get::<Flow>(format!("forum:auth:flow:{}", session).as_str())
         .await
-        .map_err(|_| ApiError::PreconditionFailed("session is nonexsistent".to_string()))?
-        .ok_or(ApiError::PreconditionFailed(
-            "session is expired".to_string(),
-        ))
+        .map_err(|_| ApiError::ResponseError(ErrorPreconditionFailed("session is nonexsistent")))?
+        .ok_or(ApiError::ResponseError(ErrorPreconditionFailed(
+            "session is expired",
+        )))
         .and_then(|f| {
             if f.expires_at < Utc::now() {
-                return Err(ApiError::PreconditionFailed(
-                    "session is expired".to_string(),
-                ));
+                return Err(ApiError::ResponseError(ErrorPreconditionFailed(
+                    "session is expired",
+                )));
             }
             Ok(f)
         })
@@ -181,9 +181,9 @@ pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
 async fn persist_flow(flow: &'_ Flow) -> Result<&'_ Flow> {
     let now = Utc::now();
     if flow.expires_at < now {
-        Err(ApiError::PreconditionFailed(
-            "session is expired".to_string(),
-        ))?
+        Err(ApiError::ResponseError(ErrorPreconditionFailed(
+            "session is expired",
+        )))
     } else {
         redis_setex(
             format!("forum:auth:flow:{}", flow.id).as_str(),

@@ -1,31 +1,30 @@
-use actix_web::error::{ErrorUnauthorized, ErrorBadRequest};
+use actix_web::error::{ErrorBadRequest, ErrorUnauthorized};
 use anyhow::Context;
 use chrono::Duration;
-use http::{method, StatusCode};
 use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
-        client::REQWEST,
         errors::{ApiError, Result},
-        nacos::rpc,
         srp::{
-            client::SrpClient,
             groups::G_2048,
             server::{SrpServer, SrpServerVerifier},
         },
     },
     dto::password::SrpPassword,
-    rpc::password,
+    rpc::password_rpc,
 };
 
 pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)> {
-    let srp_meta = match (i).await? {
+    let srp_meta = match password_rpc::fetch_srp_password(i).await? {
         Some(meta) => meta,
-        None => None,
+        None => {
+            return Err(ApiError::ResponseError(ErrorUnauthorized(
+                "invalid_identifier",
+            )))
+        }
     };
-
     let srp_server = SrpServer::new(&G_2048);
     let rng = SystemRandom::new();
     let mut b = [0u8; 64];
@@ -70,6 +69,6 @@ pub async fn srp_login(identifier: &str, m1: &str) -> Result<()> {
 }
 
 pub async fn create_srp(srp: &SrpPassword) -> Result<()> {
-    password::save_srp(srp).await?;
+    password_rpc::save_srp_password(srp).await?;
     Ok(())
 }

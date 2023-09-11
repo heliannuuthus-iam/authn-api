@@ -7,7 +7,7 @@ use lettre::{
 
 use crate::{
     common::{
-        client::REQWEST,
+        client::WEB_CLIENT,
         config::env_var,
         constant::{FORUM_SERVER, FORUM_SERVER_CLUSTER},
         errors::Result,
@@ -26,7 +26,7 @@ async fn get_sms_config(sms_temp_id: i64) -> Result<SmsConfig> {
         )
         .await
         .context("nacos instant get failed")?;
-    Ok(REQWEST
+    Ok(WEB_CLIENT
         .get(format!(
             "http://{}:{}/smsconfig/{}",
             server.ip, server.port, sms_temp_id

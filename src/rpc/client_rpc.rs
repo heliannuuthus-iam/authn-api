@@ -3,11 +3,11 @@ use http::Method;
 use reqwest::Request;
 
 use crate::{
-    common::{client::REQWEST, errors::Result, nacos::rpc, oauth::IdpType},
+    common::{client::WEB_CLIENT, errors::Result, nacos::rpc, oauth::IdpType},
     dto::client::{ClientConfig, ClientIdpConfig},
 };
 pub async fn fetch_client_config(client_id: &str) -> Result<Option<ClientConfig>> {
-    Ok(REQWEST
+    Ok(WEB_CLIENT
         .execute(Request::new(
             Method::GET,
             rpc(format!("http://forum-server/clients/{client_id}").as_str()).await?,
@@ -36,7 +36,7 @@ pub async fn fetch_client_idp_config(
     if let Some(idp_type) = idp {
         request_url.push_str(format!("/{}", idp_type).as_str());
     }
-    Ok(REQWEST
+    Ok(WEB_CLIENT
         .execute(Request::new(Method::GET, rpc(request_url.as_str()).await?))
         .await
         .with_context(|| {

@@ -3,7 +3,7 @@ use std::time::Duration;
 use reqwest::{self, ClientBuilder};
 
 lazy_static::lazy_static! {
-    pub static ref REQWEST: reqwest::Client = {
+    pub static ref WEB_CLIENT: reqwest::Client = {
         ClientBuilder::new()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),

@@ -5,7 +5,7 @@ use reqwest::Response;
 use serde_json::Value;
 
 use super::{OAuthUser, OauthClient};
-use crate::common::{client::REQWEST, errors::Result};
+use crate::common::{client::WEB_CLIENT, errors::Result};
 
 #[derive(Clone, Default)]
 pub struct GoogleClient {
@@ -50,7 +50,7 @@ impl OauthClient for GoogleClient {
     }
 
     async fn userinfo(&mut self, token: &str) -> Result<Option<OAuthUser>> {
-        let body = REQWEST
+        let body = WEB_CLIENT
             .get(self.profile_endpoint.as_str())
             .bearer_auth(token)
             .send()

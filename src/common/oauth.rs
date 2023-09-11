@@ -11,7 +11,7 @@ use tracing::debug;
 
 use self::{github::GitHubClient, google::GoogleClient};
 use super::errors::{ApiError, ConfigError, Result};
-use crate::common::{client::REQWEST, config::env_var};
+use crate::common::{client::WEB_CLIENT, config::env_var};
 
 mod github;
 mod google;
@@ -124,7 +124,7 @@ pub trait OauthClient {
 pub async fn async_http_client(
     request: HttpRequest,
 ) -> std::result::Result<HttpResponse, ConfigError> {
-    let mut request_builder = REQWEST
+    let mut request_builder = WEB_CLIENT
         .request(request.method, request.url.as_str())
         .body(request.body);
 
@@ -133,7 +133,7 @@ pub async fn async_http_client(
     }
 
     let request = request_builder.build()?;
-    let response = REQWEST.execute(request).await?;
+    let response = WEB_CLIENT.execute(request).await?;
     let status_code = response.status();
     let headers = response.headers().to_owned();
     let body = response.bytes().await?.to_vec();
