@@ -11,7 +11,7 @@ lazy_static::lazy_static! {
   pub static ref CLIENT_CONFIG_CACHE: moka::future::Cache::<String, ClientConfig> = moka::future::Cache::builder()
   .name("client_config_cache")
   .time_to_live(
-      Duration::seconds(env_var_default::<i64>("CACHE_EXPIRES", 300))
+      Duration::seconds(env_var_default::<i64>("CACHE_EXPIRES", 600))
           .to_std()
           .unwrap(),
   )
@@ -19,7 +19,15 @@ lazy_static::lazy_static! {
   pub static ref CLIENT_IDP_CONFIG_CACHE: moka::future::Cache::<String, ClientIdpConfig> = moka::future::Cache::builder()
   .name("client_idp_config_cache")
   .time_to_live(
-      Duration::seconds(env_var_default::<i64>("CACHE_EXPIRES", 300))
+      Duration::seconds(env_var_default::<i64>("CACHE_EXPIRES", 600))
+          .to_std()
+          .unwrap(),
+  )
+  .build();
+pub static ref CLIENT_CHALLENGE_CONFIG: moka::future::Cache::<String, ClientIdpConfig> = moka::future::Cache::builder()
+  .name("client_idp_config_cache")
+  .time_to_live(
+      Duration::seconds(env_var_default::<i64>("CACHE_EXPIRES", 600))
           .to_std()
           .unwrap(),
   )

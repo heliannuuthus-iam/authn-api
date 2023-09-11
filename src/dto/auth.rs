@@ -8,7 +8,7 @@ use http::Uri;
 use tracing::error;
 use validator::Validate;
 
-use super::client::{ClientIdpConfig};
+use super::client::ClientIdpConfig;
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
@@ -206,11 +206,11 @@ pub enum ChallengeType {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ChallengeRequest {
     #[serde(rename = "client_id")]
-    client_id: String,
+    pub client_id: String,
     #[serde(rename = "type")]
-    ctype: ChallengeType,
+    pub challenge_type: ChallengeType,
     #[serde(rename = "identifier")]
-    cer: String,
+    pub identifier: String,
     #[serde(rename = "proof")]
-    proof: String,
+    pub proof: String,
 }

@@ -36,10 +36,7 @@ pub async fn callback(
     flow.dispatch()
 }
 
-#[post("/challenge")]
-pub async fn challenge(Json(_c_req): Json<ChallengeRequest>) -> Result<impl Responder> {
-    Ok("".to_string())
-}
+
 
 #[post("/registry")]
 pub async fn registry(Json(form): Json<SrpPassword>) -> Result<impl Responder> {
