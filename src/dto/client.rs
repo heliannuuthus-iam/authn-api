@@ -2,7 +2,8 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::oauth::IdpType;
+use crate::common::constant::IdpType;
+
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ClientConfig {

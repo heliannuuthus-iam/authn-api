@@ -1,16 +1,20 @@
 use anyhow::Context;
-use http::Method;
+use http::{Method, StatusCode};
 use reqwest::Request;
 
 use crate::{
-    common::{client::WEB_CLIENT, errors::Result, nacos::rpc, oauth::IdpType},
-    dto::client::{ClientConfig, ClientIdpConfig},
+    common::{
+        client::WEB_CLIENT,
+        errors::Result,
+        nacos::{self, rpc}, constant::IdpType,
+    },
+    dto::{client::{ClientConfig, ClientIdpConfig}, challenge::ChallengeCofig},
 };
 pub async fn fetch_client_config(client_id: &str) -> Result<Option<ClientConfig>> {
     Ok(WEB_CLIENT
         .execute(Request::new(
             Method::GET,
-            rpc(format!("http://forum-server/clients/{client_id}").as_str()).await?,
+            nacos::rpc(format!("http://forum-server/clients/{client_id}").as_str()).await?,
         ))
         .await
         .with_context(|| {
@@ -37,7 +41,10 @@ pub async fn fetch_client_idp_config(
         request_url.push_str(format!("/{}", idp_type).as_str());
     }
     Ok(WEB_CLIENT
-        .execute(Request::new(Method::GET, rpc(request_url.as_str()).await?))
+        .execute(Request::new(
+            Method::GET,
+            nacos::rpc(request_url.as_str()).await?,
+        ))
         .await
         .with_context(|| {
             let msg = format!("fetch client({client_id}) idps config failed");
@@ -52,4 +59,20 @@ pub async fn fetch_client_idp_config(
             msg
         })
         .ok())
+}
+
+pub async fn fetch_challenge_config(client_id: &str) -> Result<Option<ChallengeCofig>> {
+    let resp = WEB_CLIENT
+        .get(
+            nacos::rpc(format!("http://forum-server/config/challenge/{client_id}").as_str())
+                .await?,
+        )
+        .send()
+        .await?;
+
+    Ok(if StatusCode::NOT_FOUND.eq(&resp.status()) {
+        None
+    } else {
+        Some(resp.json::<ChallengeCofig>().await?)
+    })
 }

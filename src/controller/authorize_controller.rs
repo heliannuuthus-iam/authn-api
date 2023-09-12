@@ -11,10 +11,7 @@ use http::StatusCode;
 use validator::Validate;
 
 use crate::{
-    common::{
-        cache::moka::get_client_idp_config,
-        errors::{ApiError, Result},
-    },
+    common::{errors::{ApiError, Result}, cache::moka},
     dto::auth::{Flow, Params},
     service::auth_service,
 };
@@ -32,7 +29,7 @@ async fn authorize(params: Params) -> Result<impl Responder> {
     params.validate()?;
     let mut flow = Flow::new(params);
 
-    let flow = match get_client_idp_config(&flow.params.client_id).await? {
+    let flow = match moka::get_idp_config(&flow.params.client_id).await? {
         Some(client) => {
             flow.client_config = Some(client);
             flow

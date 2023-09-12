@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::common::oauth::{IdpType, OAuthUser};
+use crate::common::{constant::IdpType, oauth::OAuthUser};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserProfile {

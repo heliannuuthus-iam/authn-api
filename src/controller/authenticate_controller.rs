@@ -36,8 +36,6 @@ pub async fn callback(
     flow.dispatch()
 }
 
-
-
 #[post("/registry")]
 pub async fn registry(Json(form): Json<SrpPassword>) -> Result<impl Responder> {
     user_service::create_srp(&form).await?;

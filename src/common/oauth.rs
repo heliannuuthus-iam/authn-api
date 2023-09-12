@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use self::{github::GitHubClient, google::GoogleClient};
-use super::errors::{ApiError, ConfigError, Result};
+use super::{errors::{ApiError, ConfigError, Result}, constant::IdpType};
 use crate::common::{client::WEB_CLIENT, config::env_var};
 
 mod github;
@@ -25,39 +25,6 @@ lazy_static::lazy_static! {
 pub struct AuthCodeResponse {
     pub code: String,
     pub state: String,
-}
-
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy)]
-pub enum IdpType {
-    #[serde(rename = "github")]
-    GitHub,
-    #[serde(rename = "google")]
-    Google,
-    #[serde(skip)]
-    #[default]
-    Forum,
-}
-
-impl Display for IdpType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IdpType::GitHub => write!(f, "github"),
-            IdpType::Google => write!(f, "google"),
-            IdpType::Forum => write!(f, "forum"),
-        }
-    }
-}
-
-impl From<String> for IdpType {
-    fn from(value: String) -> Self {
-        if value == "github" {
-            IdpType::GitHub
-        } else if value == "google" {
-            IdpType::Google
-        } else {
-            IdpType::Forum
-        }
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]

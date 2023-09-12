@@ -13,8 +13,8 @@ use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
         errors::{ApiError, Result},
-        oauth::{AuthCodeResponse, IdpType, OAuthUser},
-        utils::gen_id,
+        oauth::{AuthCodeResponse, OAuthUser},
+        utils::gen_id, constant::IdpType,
     },
     dto::user::{UserAssociation, UserProfile},
 };
