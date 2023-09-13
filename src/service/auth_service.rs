@@ -19,7 +19,7 @@ use crate::{
 // 生成认证链接
 pub async fn oauth_login(flow: &Flow) -> Result<String> {
     let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
-    let mut client = select_connection_client(&flow.params.connection)?;
+    let mut client = select_connection_client(&flow.request.connection)?;
     let scopes = client.scopes();
     let (auth_url, csrf_token) = client
         .client()
@@ -39,11 +39,11 @@ pub async fn oauth_login(flow: &Flow) -> Result<String> {
 
 // oauth callback
 pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Result<()> {
-    let mut client = select_connection_client(&flow.params.connection)?;
+    let mut client = select_connection_client(&flow.request.connection)?;
     let code_verifier = redis_get::<PkceCodeVerifier>(
         format!(
             "forum:oauth:pkce:{}",
-            flow.code_resp.as_ref().unwrap().state
+            flow.authorization_code.as_ref().unwrap().state
         )
         .as_str(),
     )
@@ -53,7 +53,7 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
     let token = client
         .client()
         .exchange_code(AuthorizationCode::new(
-            flow.code_resp.as_ref().unwrap().code.clone(),
+            flow.authorization_code.as_ref().unwrap().code.clone(),
         ))
         .set_pkce_verifier(code_verifier)
         .request_async(async_http_client)
@@ -88,11 +88,3 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
     Ok(())
 }
 
-pub async fn validate_flow(flow: &Flow) -> Result<()> {
-    let redirect_url = &flow.client_config.as_ref().unwrap().client.redirect_url;
-    if !redirect_url.contains(&flow.params.redirect_uri) {
-        return Err(ApiError::ResponseError(ErrorUnauthorized("invalid_redirect_url")));
-    } else {
-        Ok(())
-    }
-}

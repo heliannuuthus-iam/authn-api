@@ -1,6 +1,6 @@
 use actix_web::{
     cookie::{time::Duration, Cookie},
-    error::ErrorPreconditionFailed,
+    error::{ErrorPreconditionFailed, ErrorUnauthorized},
     HttpResponse,
 };
 use chrono::{DateTime, Utc};
@@ -12,9 +12,10 @@ use super::client::ClientIdpConfig;
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
+        constant::{AuthRequestType, IdpType, PromptType, ResponseType, OPENID_SCOPE, CONFLICT_RESPONSE_TYPE},
         errors::{ApiError, Result},
-        oauth::{AuthCodeResponse, OAuthUser},
-        utils::gen_id, constant::IdpType,
+        oauth::{AuthNCodeResponse, OAuthUser},
+        utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
 };
@@ -34,12 +35,19 @@ pub enum AuthError {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Validate, Default)]
-pub struct Params {
+pub struct AuthRequest {
     #[validate(length(min = 21, max = 22))]
     pub client_id: String,
     pub connection: IdpType,
+    #[validate(length(min = 1, max = 2))]
+    pub response_type: Vec<ResponseType>,
+    pub scope: Vec<String>,
+    pub state: Option<String>,
     #[validate(url)]
     pub redirect_uri: String,
+    pub nonce: Option<String>,
+    // https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowSteps
+    pub prompt: PromptType,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
@@ -55,9 +63,10 @@ pub enum FlowStage {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct Flow {
     pub id: String,
-    pub params: Params,
+    pub request: AuthRequest,
+    pub flow_type: AuthRequestType,
     pub client_config: Option<ClientIdpConfig>,
-    pub code_resp: Option<AuthCodeResponse>,
+    pub authorization_code: Option<AuthNCodeResponse>,
     pub current: Option<UserProfile>,
     pub subject: Option<UserProfile>,
     pub oauth_user: Option<OAuthUser>,
@@ -73,12 +82,42 @@ impl Flow {
         gen_id(24)
     }
 
-    pub fn new(params: Params) -> Self {
+    pub fn new(params: AuthRequest) -> Self {
         Flow {
             id: Self::gen_id(),
-            params,
+            request: params,
             ..Default::default()
         }
+    }
+
+    pub fn validate(&mut self) -> Result<()> {
+        let redirect_url = &self.client_config.as_ref().unwrap().client.redirect_url;
+        // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-insufficient-redirect-uri-v
+        if !redirect_url.contains(&self.request.redirect_uri) {
+            return Err(ApiError::ResponseError(ErrorUnauthorized(
+                "invalid_redirect_url",
+            )));
+        };
+
+        if self
+            .request
+            .response_type
+            .iter()
+            .filter(|&r| CONFLICT_RESPONSE_TYPE.contains(r))
+            .count()
+            == CONFLICT_RESPONSE_TYPE.len()
+        {
+            return Err(ApiError::ResponseError(ErrorUnauthorized(
+                "conflict_response_type",
+            )))
+        }
+        // https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
+        if self.request.scope.contains(&OPENID_SCOPE.to_string()) {
+            self.flow_type = AuthRequestType::Oidc
+        } else {
+            self.flow_type = AuthRequestType::Oauth
+        }
+        Ok(())
     }
 
     pub fn next_uri(&self) -> String {
@@ -95,7 +134,7 @@ impl Flow {
             FlowStage::Initialized => "/login",
             FlowStage::Authenticating => "/login",
             FlowStage::Authenticated => "/confirm",
-            FlowStage::Authorized => "/done",
+            FlowStage::Authorized => self.request.redirect_uri.as_str(),
             FlowStage::Completed => "/done",
         };
         builder

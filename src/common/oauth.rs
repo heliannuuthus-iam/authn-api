@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use self::{github::GitHubClient, google::GoogleClient};
-use super::{errors::{ApiError, ConfigError, Result}, constant::IdpType};
+use super::{
+    constant::IdpType,
+    errors::{ApiError, ConfigError, Result},
+};
 use crate::common::{client::WEB_CLIENT, config::env_var};
 
 mod github;
@@ -22,9 +25,18 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct AuthCodeResponse {
+pub struct AuthNCodeResponse {
     pub code: String,
-    pub state: String,
+    pub state: Option<String>,
+}
+
+impl AuthNCodeResponse {
+    pub fn new(code: &str, state: Option<String>) -> Self {
+        Self {
+            code: code.to_string(),
+            state,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]

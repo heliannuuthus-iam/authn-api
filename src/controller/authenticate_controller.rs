@@ -6,9 +6,9 @@ use actix_web::{
 use http::{header, StatusCode};
 
 use crate::{
-    common::{errors::Result, oauth::AuthCodeResponse},
+    common::{errors::Result, oauth::AuthNCodeResponse},
     dto::{
-        auth::{validate_flow, ChallengeRequest},
+        auth::validate_flow,
         password::{PreSrpRequest, PreSrpRespose, SrpPassword, SrpRequest},
     },
     service::{auth_service, user_service},
@@ -28,10 +28,10 @@ async fn oauth_login(req: HttpRequest) -> Result<impl Responder> {
 #[get("/oauth/callback/{connection}")]
 pub async fn callback(
     request: HttpRequest,
-    Query(code_resp): Query<AuthCodeResponse>,
+    Query(code_resp): Query<AuthNCodeResponse>,
 ) -> Result<impl Responder> {
     let mut flow = validate_flow(&request).await?;
-    flow.code_resp = code_resp.into();
+    flow.authorization_code = code_resp.into();
     auth_service::oauth_user_profile(&mut flow, request).await?;
     flow.dispatch()
 }
