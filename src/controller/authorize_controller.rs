@@ -18,7 +18,7 @@ use crate::{
         oauth::AuthNCodeResponse,
         utils::gen_id,
     },
-    dto::auth::{AuthRequest, Flow},
+    dto::auth::{AuthRequest, Flow, AuthError},
 };
 #[get("/authorize")]
 pub async fn query_authorize(Query(params): web::Query<AuthRequest>) -> Result<impl Responder> {
@@ -40,10 +40,20 @@ async fn authorize(params: &AuthRequest) -> Result<impl Responder> {
         }
         None => return Err(ApiError::ResponseError(ErrorUnauthorized("invalid_client"))),
     };
-    // flow 规则校验
+    // flow 校验
     flow.validate()?;
 
-    
+    match flow.flow_type {
+        crate::common::constant::AuthRequestType::Oauth => {
+
+        },
+        crate::common::constant::AuthRequestType::Oidc => {
+
+        },
+        crate::common::constant::AuthRequestType::Unknown => {
+            flow.error = Some(AuthError::InvalidClient)
+        }
+    }
 
     Ok(HttpResponse::build(StatusCode::MOVED_PERMANENTLY)
         .append_header((header::LOCATION, flow.request.redirect_uri))

@@ -1,4 +1,7 @@
-use actix_web::{HttpRequest, error::ErrorUnauthorized};
+use actix_web::{
+    error::{ErrorUnauthorized, ErrorUnprocessableEntity},
+    HttpRequest,
+};
 use anyhow::Context;
 use chrono::Duration;
 use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, TokenResponse};
@@ -75,11 +78,7 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
                 flow.stage = FlowStage::Authenticated;
             }
         }
-        None => {
-            flow.error = Some(AuthError::UnprocessableContent(format!(
-                "oauth user profile get failed"
-            )))
-        }
+        None => return Err(ApiError::ResponseError(ErrorUnprocessableEntity("oauth user profile get failed"))),
     }
 
     // oauth 身份注入成功，置为 authenticating
@@ -87,4 +86,3 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
 
     Ok(())
 }
-

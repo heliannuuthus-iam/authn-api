@@ -12,7 +12,10 @@ use super::client::ClientIdpConfig;
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
-        constant::{AuthRequestType, IdpType, PromptType, ResponseType, OPENID_SCOPE, CONFLICT_RESPONSE_TYPE},
+        constant::{
+            AuthRequestType, IdpType, PromptType, ResponseType, CONFLICT_RESPONSE_TYPE,
+            OPENID_SCOPE,
+        },
         errors::{ApiError, Result},
         oauth::{AuthNCodeResponse, OAuthUser},
         utils::gen_id,
@@ -22,16 +25,14 @@ use crate::{
 
 #[derive(Debug, Clone, thiserror::Error, serde::Deserialize, serde::Serialize)]
 pub enum AuthError {
-    #[error("un_authenticate: {0}")]
-    UnAuthenticate(String),
-    #[error("access_denied: {0}")]
-    AccessDenied(String),
-    #[error("user not found: {0}")]
-    NotFound(String),
-    #[error("unprocessable entity: {0}")]
-    UnprocessableContent(String),
-    #[error("auth header error: {0}")]
-    PreconditionFailed(String),
+    #[error("invalid_client")]
+    InvalidClient,
+    #[error("login_required")]
+    LoginRequired,
+    #[error("account_selection_required")]
+    AccountSelectionRequired,
+    #[error("consent_required")]
+    ConsentRequired,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Validate, Default)]
@@ -109,7 +110,7 @@ impl Flow {
         {
             return Err(ApiError::ResponseError(ErrorUnauthorized(
                 "conflict_response_type",
-            )))
+            )));
         }
         // https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
         if self.request.scope.contains(&OPENID_SCOPE.to_string()) {
@@ -122,14 +123,6 @@ impl Flow {
 
     pub fn next_uri(&self) -> String {
         let mut builder = Uri::builder().scheme("http");
-
-        builder = match self.transfer_error() {
-            Some(auth_err) => builder
-                .path_and_query("/done")
-                .path_and_query(format!("error={auth_err}")),
-            None => builder,
-        };
-
         let next_uri = match self.stage {
             FlowStage::Initialized => "/login",
             FlowStage::Authenticating => "/login",
@@ -137,11 +130,15 @@ impl Flow {
             FlowStage::Authorized => self.request.redirect_uri.as_str(),
             FlowStage::Completed => "/done",
         };
-        builder
-            .path_and_query(next_uri)
-            .build()
-            .unwrap_or_default()
-            .to_string()
+        builder = builder.path_and_query(next_uri);
+        if let Some(auth_error) = self.error {
+            builder.path_and_query(format!("error={auth_error}"))
+        } else {
+            builder
+        }
+        .build()
+        .unwrap_or_default()
+        .to_string()
     }
 
     pub fn dispatch(&self) -> Result<HttpResponse> {
@@ -177,19 +174,6 @@ impl Flow {
                 .finish(),
         )?;
         Ok(resp)
-    }
-
-    fn transfer_error<'a>(&self) -> Option<&'a str> {
-        if let Some(ref err) = self.error {
-            match err {
-                AuthError::UnAuthenticate(_msg) => Some("invalid_client"),
-                AuthError::AccessDenied(_msg) => Some("access_denied"),
-                AuthError::UnprocessableContent(_msg) => Some("unproccessed"),
-                _ => Some("unkonw"),
-            }
-        } else {
-            None
-        }
     }
 }
 
