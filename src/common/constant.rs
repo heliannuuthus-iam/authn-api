@@ -5,8 +5,7 @@ pub const FORUM_SERVER: &str = "forum-server";
 pub const FORUM_SERVER_CLUSTER: &str = "default";
 pub const OPENID_SCOPE: &str = "openid";
 pub const OFFLINE_ACCESS_SCOPE: &str = "offline_access";
-pub const CONFLICT_RESPONSE_TYPE: Vec<ResponseType> =
-    vec![ResponseType::IdToken, ResponseType::Code];
+pub const CONFLICT_RESPONSE_TYPE: &[&ResponseType] = &[&ResponseType::IdToken, &ResponseType::Code];
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -66,11 +65,9 @@ pub enum PromptType {
     SelectAccount,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthRequestType {
     Oauth,
     Oidc,
-    #[default]
-    Unknown,
 }

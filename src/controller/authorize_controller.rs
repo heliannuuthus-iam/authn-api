@@ -18,7 +18,7 @@ use crate::{
         oauth::AuthNCodeResponse,
         utils::gen_id,
     },
-    dto::auth::{AuthRequest, Flow, AuthError},
+    dto::auth::{AuthError, AuthRequest, Flow},
 };
 #[get("/authorize")]
 pub async fn query_authorize(Query(params): web::Query<AuthRequest>) -> Result<impl Responder> {
@@ -43,18 +43,6 @@ async fn authorize(params: &AuthRequest) -> Result<impl Responder> {
     // flow 校验
     flow.validate()?;
 
-    match flow.flow_type {
-        crate::common::constant::AuthRequestType::Oauth => {
-
-        },
-        crate::common::constant::AuthRequestType::Oidc => {
-
-        },
-        crate::common::constant::AuthRequestType::Unknown => {
-            flow.error = Some(AuthError::InvalidClient)
-        }
-    }
-
     Ok(HttpResponse::build(StatusCode::MOVED_PERMANENTLY)
         .append_header((header::LOCATION, flow.request.redirect_uri))
         .cookie(CookieBuilder::new("heliannuuthus", flow.id).finish())
@@ -70,4 +58,15 @@ async fn authorization_code(flow: &mut Flow) -> Result<AuthNCodeResponse> {
         Duration::minutes(10),
     );
     Ok(result)
+}
+
+async fn exchange_token(flow: &mut Flow) {
+    let change_token = |&mut flow| {
+        
+    };
+
+    match flow.flow_type {
+        crate::common::constant::AuthRequestType::Oauth => {}
+        crate::common::constant::AuthRequestType::Oidc => {}
+    }
 }

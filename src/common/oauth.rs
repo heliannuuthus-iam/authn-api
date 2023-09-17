@@ -39,6 +39,18 @@ impl AuthNCodeResponse {
     }
 }
 
+pub struct Tokens {
+    
+}
+
+pub struct IdToken {
+    
+}
+
+pub struct AccessToken {
+
+}
+
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct OAuthUser {
     pub openid: String,

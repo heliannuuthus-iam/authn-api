@@ -46,7 +46,12 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
     let code_verifier = redis_get::<PkceCodeVerifier>(
         format!(
             "forum:oauth:pkce:{}",
-            flow.authorization_code.as_ref().unwrap().state
+            flow.authorization_code
+                .as_ref()
+                .unwrap()
+                .state
+                .as_ref()
+                .unwrap()
         )
         .as_str(),
     )
@@ -78,7 +83,11 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
                 flow.stage = FlowStage::Authenticated;
             }
         }
-        None => return Err(ApiError::ResponseError(ErrorUnprocessableEntity("oauth user profile get failed"))),
+        None => {
+            return Err(ApiError::ResponseError(ErrorUnprocessableEntity(
+                "oauth user profile get failed",
+            )))
+        }
     }
 
     // oauth 身份注入成功，置为 authenticating

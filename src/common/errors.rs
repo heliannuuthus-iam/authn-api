@@ -30,6 +30,8 @@ pub enum ApiError {
     InternalError(#[from] anyhow::Error),
     #[error("remote error: {0}")]
     RemoteError(#[from] reqwest::Error),
+    #[error("{0}")]
+    HttpError(#[from] http::Error),
     #[error("srp error {0}")]
     SrpAuthError(#[from] SrpError),
 }

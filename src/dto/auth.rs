@@ -65,9 +65,10 @@ pub enum FlowStage {
 pub struct Flow {
     pub id: String,
     pub request: AuthRequest,
-    pub flow_type: AuthRequestType,
+    pub flow_type: Vec<AuthRequestType>,
     pub client_config: Option<ClientIdpConfig>,
     pub authorization_code: Option<AuthNCodeResponse>,
+    pub tokens: Option<Tokens>,
     pub current: Option<UserProfile>,
     pub subject: Option<UserProfile>,
     pub oauth_user: Option<OAuthUser>,
@@ -104,7 +105,7 @@ impl Flow {
             .request
             .response_type
             .iter()
-            .filter(|&r| CONFLICT_RESPONSE_TYPE.contains(r))
+            .filter(|&r| CONFLICT_RESPONSE_TYPE.contains(&r))
             .count()
             == CONFLICT_RESPONSE_TYPE.len()
         {
@@ -112,12 +113,12 @@ impl Flow {
                 "conflict_response_type",
             )));
         }
+        let mut flow_types = &self.flow_type;
         // https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
         if self.request.scope.contains(&OPENID_SCOPE.to_string()) {
-            self.flow_type = AuthRequestType::Oidc
-        } else {
-            self.flow_type = AuthRequestType::Oauth
+            flow_types.push(AuthRequestType::Oidc);
         }
+        flow_types.push(AuthRequestType::Oauth);
         Ok(())
     }
 
@@ -131,7 +132,7 @@ impl Flow {
             FlowStage::Completed => "/done",
         };
         builder = builder.path_and_query(next_uri);
-        if let Some(auth_error) = self.error {
+        if let Some(auth_error) = &self.error {
             builder.path_and_query(format!("error={auth_error}"))
         } else {
             builder
