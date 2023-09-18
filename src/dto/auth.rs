@@ -8,7 +8,7 @@ use http::Uri;
 use tracing::error;
 use validator::Validate;
 
-use super::client::ClientIdpConfig;
+use super::{client::ClientIdpConfig, token::Tokens};
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
@@ -17,7 +17,7 @@ use crate::{
             OPENID_SCOPE,
         },
         errors::{ApiError, Result},
-        oauth::{AuthNCodeResponse, OAuthUser, Tokens},
+        oauth::{AuthNCodeResponse, OAuthUser, },
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},

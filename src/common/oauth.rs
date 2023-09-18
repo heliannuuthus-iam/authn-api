@@ -40,42 +40,6 @@ impl AuthNCodeResponse {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Tokens {
-    token_type: TokenType,
-    id_token: IdToken,
-    access_token: AccessToken,
-    expires_in: Duration,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TokenCalims {
-    iss: String,
-    sub: String,
-    // audience using single resource server
-    // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-access-token-privilege-rest
-    aud: String,
-    exp: DateTime<Utc>,
-    nbf: DateTime<Utc>,
-    iat: DateTime<Utc>,
-    jti: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct IdToken {
-    #[serde(flatten)]
-    token: TokenCalims,
-    email: String,
-    gander: Gander,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AccessToken {
-    #[serde(flatten)]
-    token: TokenCalims,
-    scope: Vec<String>,
-}
-
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct OAuthUser {
     pub openid: String,

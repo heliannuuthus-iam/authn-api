@@ -18,9 +18,6 @@ pub async fn code_challenge(Json(cq): Json<ChallengeRequest>) -> Result<impl Res
             )))
         }
     };
-    
-    
-
     Ok("".to_string())
 }
 
