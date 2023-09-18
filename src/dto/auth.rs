@@ -1,23 +1,27 @@
+use std::{time::Duration, collections::HashMap};
+
 use actix_web::{
-    cookie::{time::Duration, Cookie},
+    cookie::Cookie,
     error::{ErrorPreconditionFailed, ErrorUnauthorized},
     HttpResponse,
 };
 use chrono::{DateTime, Utc};
 use http::Uri;
+use serde::{Deserialize, Serialize};
 use tracing::error;
 use validator::Validate;
 
-use super::{client::ClientIdpConfig, token::Tokens};
+use super::client::ClientIdpConfig;
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
         constant::{
-            AuthRequestType, IdpType, PromptType, ResponseType, CONFLICT_RESPONSE_TYPE,
+            AuthRequestType, IdpType, PromptType, ResponseType, TokenType, CONFLICT_RESPONSE_TYPE,
             OPENID_SCOPE,
         },
         errors::{ApiError, Result},
-        oauth::{AuthNCodeResponse, OAuthUser, },
+        jwt::{AccessToken, IdToken},
+        oauth::{AuthNCodeResponse, OAuthUser},
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
@@ -35,11 +39,10 @@ pub enum AuthError {
     ConsentRequired,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Validate, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate, Default)]
 pub struct AuthRequest {
-    #[validate(length(min = 21, max = 22))]
     pub client_id: String,
-    pub connection: IdpType,
+    pub audience: Option<String>,
     #[validate(length(min = 1, max = 2))]
     pub response_type: Vec<ResponseType>,
     pub scope: Vec<String>,
@@ -49,6 +52,17 @@ pub struct AuthRequest {
     pub nonce: Option<String>,
     // https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowSteps
     pub prompt: PromptType,
+    // https://datatracker.ietf.org/doc/html/rfc7636
+    pub code_challenge_method: Option<String>,
+    pub code_challenge: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Tokens {
+    token_type: TokenType,
+    id_token: IdToken,
+    access_token: AccessToken,
+    expires_in: Duration,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
@@ -73,6 +87,7 @@ pub struct Flow {
     pub subject: Option<UserProfile>,
     pub oauth_user: Option<OAuthUser>,
     pub associations: Vec<UserAssociation>,
+    pub connections: HashMap<String, Connection>,
     pub stage: FlowStage,
     pub error: Option<AuthError>,
     message: Option<String>,
@@ -171,7 +186,7 @@ impl Flow {
         };
         resp.add_cookie(
             &Cookie::build("auth_session", &self.id)
-                .max_age(Duration::minutes(10))
+                .max_age(actix_web::cookie::time::Duration::minutes(10))
                 .finish(),
         )?;
         Ok(resp)

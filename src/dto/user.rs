@@ -1,12 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use crate::common::{constant::IdpType, oauth::OAuthUser};
+use crate::common::{
+    constant::{Gander, IdpType},
+    oauth::OAuthUser,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserProfile {
     pub openid: String,
     pub nickname: String,
     pub avatar: String,
+    pub gander: Gander,
+    pub email: Option<String>,
 }
 
 impl From<OAuthUser> for UserProfile {
@@ -15,6 +20,8 @@ impl From<OAuthUser> for UserProfile {
             openid: value.openid,
             nickname: value.nickname,
             avatar: value.avatar,
+            gander: Gander::Unknwon,
+            email: value.email,
         }
     }
 }
@@ -33,6 +40,8 @@ pub struct SubjectProfile {
     pub openid: String,
     pub nickname: String,
     pub avatar: String,
+    pub email: Option<String>,
+    pub gander: Gander,
     pub associations: Vec<UserAssociation>,
 }
 
@@ -42,6 +51,8 @@ impl From<SubjectProfile> for UserProfile {
             openid: value.openid,
             nickname: value.nickname,
             avatar: value.avatar,
+            gander: value.gander,
+            email: value.email,
         }
     }
 }

@@ -5,6 +5,7 @@ pub const FORUM_SERVER: &str = "forum-server";
 pub const FORUM_SERVER_CLUSTER: &str = "default";
 pub const OPENID_SCOPE: &str = "openid";
 pub const OFFLINE_ACCESS_SCOPE: &str = "offline_access";
+pub const TOKEN_ISSUER: &str = "https://auth.heliannuuthus.com/issuer/{}";
 pub const CONFLICT_RESPONSE_TYPE: &[&ResponseType] = &[&ResponseType::IdToken, &ResponseType::Code];
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

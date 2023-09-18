@@ -22,7 +22,7 @@ use crate::{
 // 生成认证链接
 pub async fn oauth_login(flow: &Flow) -> Result<String> {
     let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
-    let mut client = select_connection_client(&flow.request.connection)?;
+    let mut client = select_connection_client(&flow.connection)?;
     let scopes = client.scopes();
     let (auth_url, csrf_token) = client
         .client()
