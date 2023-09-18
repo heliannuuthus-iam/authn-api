@@ -1,7 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Duration};
 
 use actix_web::error::ErrorBadRequest;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use oauth2::{
     basic::BasicClient, AuthUrl, ClientId, ClientSecret, HttpRequest, HttpResponse, RedirectUrl,
     Scope, TokenUrl,
@@ -11,7 +12,7 @@ use tracing::debug;
 
 use self::{github::GitHubClient, google::GoogleClient};
 use super::{
-    constant::IdpType,
+    constant::{Gander, IdpType, TokenType},
     errors::{ApiError, ConfigError, Result},
 };
 use crate::common::{client::WEB_CLIENT, config::env_var};
@@ -39,16 +40,40 @@ impl AuthNCodeResponse {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Tokens {
-    
+    token_type: TokenType,
+    id_token: IdToken,
+    access_token: AccessToken,
+    expires_in: Duration,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct TokenCalims {
+    iss: String,
+    sub: String,
+    // audience using single resource server
+    // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-access-token-privilege-rest
+    aud: String,
+    exp: DateTime<Utc>,
+    nbf: DateTime<Utc>,
+    iat: DateTime<Utc>,
+    jti: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct IdToken {
-    
+    #[serde(flatten)]
+    token: TokenCalims,
+    email: String,
+    gander: Gander,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct AccessToken {
-
+    #[serde(flatten)]
+    token: TokenCalims,
+    scope: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]

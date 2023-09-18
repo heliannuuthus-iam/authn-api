@@ -61,12 +61,11 @@ async fn authorization_code(flow: &mut Flow) -> Result<AuthNCodeResponse> {
 }
 
 async fn exchange_token(flow: &mut Flow) {
-    let change_token = |&mut flow| {
-        
-    };
-
+    let client_config = flow.client_config.unwrap();
     match flow.flow_type {
-        crate::common::constant::AuthRequestType::Oauth => {}
+        crate::common::constant::AuthRequestType::Oauth => {
+            
+        }
         crate::common::constant::AuthRequestType::Oidc => {}
     }
 }

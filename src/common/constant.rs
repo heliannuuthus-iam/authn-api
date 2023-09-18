@@ -71,3 +71,20 @@ pub enum AuthRequestType {
     Oauth,
     Oidc,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum Gander {
+    #[serde(rename = "m")]
+    Male,
+    #[serde(rename = "f")]
+    Female,
+    #[serde(rename = "unkown")]
+    Unknwon,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "PascalCase")]
+pub enum TokenType {
+    Bearer,
+    Basic,
+}

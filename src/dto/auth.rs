@@ -17,7 +17,7 @@ use crate::{
             OPENID_SCOPE,
         },
         errors::{ApiError, Result},
-        oauth::{AuthNCodeResponse, OAuthUser},
+        oauth::{AuthNCodeResponse, OAuthUser, Tokens},
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
