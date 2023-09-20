@@ -2,7 +2,10 @@ use anyhow::Context;
 use chrono::Duration;
 use redis::{aio::Connection, Client};
 
-use crate::common::{config::env_var, errors::{ConfigError, Result}};
+use crate::common::{
+    config::env_var,
+    errors::{ConfigError, Result},
+};
 
 lazy_static::lazy_static! {
   pub static ref CACHE: Client = {

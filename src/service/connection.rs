@@ -1,18 +1,57 @@
-use std::{fmt::Display, ops::Deref};
+use std::fmt::Display;
 
+use actix_web::error::ErrorBadRequest;
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
 
-use crate::dto::auth::Flow;
+use self::{github::GITHUB_CLIENT, google::GOOGLE_CLIENT};
+use crate::{
+    common::{
+        cache::redis::redis_setex,
+        errors::{ApiError, Result},
+        utils::{encode64, gen_random},
+    },
+    dto::{auth::Flow, user::IdpUser},
+};
 
 pub mod github;
 pub mod google;
 
+#[async_trait::async_trait]
+pub trait Connection: MFA + IdentifierProvider {
+    async fn verify();
+}
+
+#[async_trait::async_trait]
+pub trait MFA {}
+
+#[async_trait::async_trait]
 pub trait IdentifierProvider {
     type Type;
-    fn authenticate(&self, flow: &Flow);
+
+    async fn pkce(&self, flow: &Flow) -> Result<(String, String)> {
+        let code_verifier = encode64(&pkce::code_verifier(128));
+        let state = gen_random(16);
+        redis_setex(
+            format!("forum:oauth:pkce:{}", state).as_str(),
+            &code_verifier,
+            Duration::minutes(10),
+        )
+        .await?;
+        redis_setex(
+            format!("forum:oauth:flow:{}", state).as_str(),
+            flow.clone(),
+            Duration::minutes(10),
+        )
+        .await?;
+        Ok((code_verifier, state))
+    }
+
+    async fn authorize(&self, flow: &mut Flow) -> String;
 
     fn types(&self) -> Self::Type;
-    fn userinfo(&self) -> String;
+
+    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>>;
 }
 
 pub struct OAuthEndpoint {

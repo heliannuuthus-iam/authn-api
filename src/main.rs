@@ -34,8 +34,6 @@ async fn main() -> std::io::Result<()> {
             .service(controller::authorize_controller::form_authorize)
             .service(controller::authenticate_controller::pre_login)
             .service(controller::authenticate_controller::form_login)
-            .service(controller::authenticate_controller::oauth_login)
-            .service(controller::authenticate_controller::callback)
     })
     .bind((
         env_var::<String>("SERVER_HOST"),

@@ -4,7 +4,6 @@ pub mod config;
 pub mod errors;
 pub mod jwt;
 pub mod nacos;
-pub mod oauth;
 pub mod srp;
 pub mod utils;
 pub mod constant;

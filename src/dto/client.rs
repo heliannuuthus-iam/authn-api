@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{common::constant::ConnectionType, service::connection::IdpType};
+use crate::service::connection::IdpType;
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ClientConfig {

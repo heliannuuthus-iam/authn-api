@@ -1,4 +1,4 @@
-use std::{time::Duration, collections::HashMap};
+use std::{collections::HashMap, time::Duration};
 
 use actix_web::{
     cookie::Cookie,
@@ -16,15 +16,15 @@ use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
         constant::{
-            AuthRequestType, ConnectionType, PromptType, ResponseType, TokenType, CONFLICT_RESPONSE_TYPE,
+            AuthRequestType, PromptType, ResponseType, TokenType, CONFLICT_RESPONSE_TYPE,
             OPENID_SCOPE,
         },
         errors::{ApiError, Result},
         jwt::{AccessToken, IdToken},
-        oauth::{AuthNCodeResponse, OAuthUser},
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
+    service::connection::Connection,
 };
 
 #[derive(Debug, Clone, thiserror::Error, serde::Deserialize, serde::Serialize)]
@@ -56,6 +56,17 @@ pub struct AuthRequest {
     pub code_challenge_method: Option<String>,
     pub code_challenge: Option<String>,
 }
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AuthorizationCode {
+    pub code: String,
+    pub state: Option<String>,
+}
+
+impl AuthorizationCode {
+    pub fn new(code: String, state: Option<String>) -> Self {
+        Self { code, state }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tokens {
@@ -81,7 +92,8 @@ pub struct Flow {
     pub request: AuthRequest,
     pub flow_type: Vec<AuthRequestType>,
     pub client_config: Option<ClientIdpConfig>,
-    pub authorization_code: Option<AuthNCodeResponse>,
+    pub authorization_code: Option<AuthorizationCode>,
+    pub connections: Vec<dyn Connection>,
     pub tokens: Option<Tokens>,
     pub subject: Option<UserProfile>,
     pub associations: Vec<UserAssociation>,

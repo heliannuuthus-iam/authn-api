@@ -22,6 +22,13 @@ pub fn gen_id(size: usize) -> String {
     encode62(&dest)
 }
 
+pub fn gen_random(size: usize) -> String {
+    let rng = SystemRandom::new();
+    let mut dest: Vec<u8> = vec![0; size];
+    rng.fill(&mut dest).unwrap();
+    encode64(&dest)
+}
+
 pub fn encode62(source: &[u8]) -> String {
     let base: usize = BASE62_CHARSETS.len();
     let mut result = String::new();

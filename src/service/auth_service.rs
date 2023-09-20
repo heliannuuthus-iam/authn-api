@@ -1,49 +1,39 @@
-use actix_web::{
-    error::{ErrorUnauthorized, ErrorUnprocessableEntity},
-    HttpRequest,
-};
-use anyhow::Context;
-use chrono::Duration;
-use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, TokenResponse};
+use std::collections::HashMap;
 
+use actix_web::error::ErrorUnprocessableEntity;
+
+use super::connection;
 use crate::{
     common::{
-        cache::redis::{redis_get, redis_setex},
+        cache::redis::redis_get,
         errors::{ApiError, Result},
-        oauth::{async_http_client, select_connection_client},
     },
     dto::{
-        auth::{AuthError, Flow, FlowStage},
+        auth::{Flow, FlowStage},
         user::UserProfile,
     },
     rpc::user_rpc::get_user_associations,
 };
 
 // 生成认证链接
-pub async fn oauth_login(flow: &Flow) -> Result<String> {
-    let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
-    let mut client = select_connection_client(&flow.connection)?;
-    let scopes = client.scopes();
-    let (auth_url, csrf_token) = client
-        .client()
-        .authorize_url(CsrfToken::new_random)
-        .set_pkce_challenge(pkce_code_challenge)
-        .add_scopes(scopes)
-        .url();
-    // 将 pkce code 存入缓存中
-    redis_setex(
-        format!("forum:oauth:pkce:{}", csrf_token.secret()).as_str(),
-        pkce_code_verifier.secret(),
-        Duration::minutes(10),
-    )
-    .await?;
-    Ok(auth_url.to_string())
+pub async fn build_connection(flow: &mut Flow) -> Result<HashMap<String, String>> {
+    flow.client_config
+        .unwrap()
+        .idp_configs
+        .iter()
+        .map(|&idp| {
+            (
+                idp.idp_type.to_string(),
+                connection::select_connection_client(&idp.idp_type)?.authorize(flow),
+            )
+        })
+        .collect()
 }
 
 // oauth callback
-pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Result<()> {
-    let mut client = select_connection_client(&flow.request.connection)?;
-    let code_verifier = redis_get::<PkceCodeVerifier>(
+pub async fn oauth_user_profile(flow: &mut Flow) -> Result<()> {
+    let mut client = connection::select_connection_client(&flow.request.connection)?;
+    let code_verifier = redis_get::<String>(
         format!(
             "forum:oauth:pkce:{}",
             flow.authorization_code
@@ -58,18 +48,8 @@ pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Resul
     .await?
     .unwrap();
 
-    let token = client
-        .client()
-        .exchange_code(AuthorizationCode::new(
-            flow.authorization_code.as_ref().unwrap().code.clone(),
-        ))
-        .set_pkce_verifier(code_verifier)
-        .request_async(async_http_client)
-        .await
-        .context("exchange code failed")?;
-
     // 查询
-    if let Some(ref oauth_user) = client.userinfo(token.access_token().secret()).await? {
+    if let Some(ref oauth_user) = client.userinfo().await? {
         flow.oauth_user = Some(oauth_user.clone());
     }
 

@@ -4,52 +4,42 @@ use oauth2::{basic::BasicClient, Scope};
 use reqwest::Response;
 use serde_json::Value;
 
-use super::{OAuthUser, OauthClient};
-use crate::common::{client::WEB_CLIENT, errors::Result};
-
+use super::{IdentifierProvider, OAuthEndpoint};
+use crate::{
+    common::{client::WEB_CLIENT, errors::Result},
+    dto::{
+        auth::Flow,
+        user::{IdpUser, UserProfile},
+    },
+    service::connection::IdpType,
+};
+lazy_static::lazy_static!(
+    pub static ref GOOGLE_CLIENT: Google = Google::new();
+);
 #[derive(Clone, Default)]
-pub struct GoogleClient {
-    inner: Option<BasicClient>,
-    pub server_endpoint: String,
-    pub profile_endpoint: String,
-    pub scopes: Vec<Scope>,
+pub struct Google {
+    endpoints: OAuthEndpoint,
 }
 
-impl GoogleClient {
-    pub fn new() -> Self {
-        let mut sl = Self {
-            ..Default::default()
-        };
-        let (client, server_endpoint, _profile_endpoint, scopes) = sl.init();
-        sl.server_endpoint = server_endpoint;
-        sl.inner = Some(client);
-        sl.scopes = scopes;
-        sl
+impl Google {
+    pub fn new(endpoints: OAuthEndpoint) -> Self {
+        Self { endpoints }
     }
 }
 
-#[async_trait]
-impl OauthClient for GoogleClient {
-    fn kind(&self) -> String {
-        String::from("GOOGLE")
+#[async_trait::async_trait]
+impl IdentifierProvider for Google {
+    type Type = IdpType;
+
+    async fn authorize(&self, flow: &mut Flow) -> String {
+        todo!()
     }
 
-    fn client(&mut self) -> BasicClient {
-        self.inner.as_ref().unwrap().clone()
-    }
-    fn server_endpoint(&mut self) -> String {
-        self.server_endpoint.clone()
+    fn types(&self) -> Self::Type {
+        IdpType::Google
     }
 
-    fn profile_endpoint(&mut self) -> String {
-        self.profile_endpoint.clone()
-    }
-
-    fn scopes(&mut self) -> Vec<Scope> {
-        self.scopes.to_vec()
-    }
-
-    async fn userinfo(&mut self, token: &str) -> Result<Option<OAuthUser>> {
+    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>> {
         let body = WEB_CLIENT
             .get(self.profile_endpoint.as_str())
             .bearer_auth(token)
@@ -66,7 +56,7 @@ impl OauthClient for GoogleClient {
                 tracing::error!("[google] user profile serialize failed");
                 "[google] user profile serialize failed"
             })?;
-        let mut oauth_user = OAuthUser::default();
+        let mut oauth_user = IdpUser::default();
         if let Some(email) = body["email"].as_str() {
             oauth_user.email = Some(email.to_string());
         }
