@@ -11,14 +11,8 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use self::{github::GitHubClient, google::GoogleClient};
-use super::{
-    constant::{Gander, IdpType, TokenType},
-    errors::{ApiError, ConfigError, Result},
-};
+use super::errors::{ApiError, ConfigError, Result};
 use crate::common::{client::WEB_CLIENT, config::env_var};
-
-mod github;
-mod google;
 
 lazy_static::lazy_static! {
     pub static ref GITHUB_CLIENT: GitHubClient = GitHubClient::new();
@@ -127,14 +121,4 @@ pub async fn async_http_client(
         headers,
         body,
     })
-}
-
-pub fn select_connection_client(idp_type: &IdpType) -> Result<Box<dyn OauthClient>> {
-    match idp_type {
-        IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
-        IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
-        _ => Err(ApiError::ResponseError(ErrorBadRequest(format!(
-            "unknwon idp type({idp_type})"
-        )))),
-    }
 }

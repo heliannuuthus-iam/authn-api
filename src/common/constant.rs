@@ -15,39 +15,6 @@ pub enum ChallengeType {
     Code,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy)]
-pub enum IdpType {
-    #[serde(rename = "github")]
-    GitHub,
-    #[serde(rename = "google")]
-    Google,
-    #[serde(skip)]
-    #[default]
-    Forum,
-}
-
-impl Display for IdpType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IdpType::GitHub => write!(f, "github"),
-            IdpType::Google => write!(f, "google"),
-            IdpType::Forum => write!(f, "forum"),
-        }
-    }
-}
-
-impl From<String> for IdpType {
-    fn from(value: String) -> Self {
-        if value == "github" {
-            IdpType::GitHub
-        } else if value == "google" {
-            IdpType::Google
-        } else {
-            IdpType::Forum
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponseType {
@@ -73,14 +40,15 @@ pub enum AuthRequestType {
     Oidc,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub enum Gander {
     #[serde(rename = "m")]
     Male,
     #[serde(rename = "f")]
     Female,
-    #[serde(rename = "unkown")]
-    Unknwon,
+    #[default]
+    #[serde(rename = "unknown")]
+    Unknown,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

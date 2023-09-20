@@ -65,8 +65,6 @@ async fn exchange_token(flow: &mut Flow) {
     let client_config = flow.client_config.unwrap();
     match flow.flow_type {
         crate::common::constant::AuthRequestType::Oauth => {
-            jwt::generate_jws(claims, secret)
-
         }
         crate::common::constant::AuthRequestType::Oidc => {}
     }

@@ -1,8 +1,9 @@
 use std::time::Duration;
 
+use lazy_static::lazy_static;
 use reqwest::{self, ClientBuilder};
 
-lazy_static::lazy_static! {
+lazy_static! {
     pub static ref WEB_CLIENT: reqwest::Client = {
         ClientBuilder::new()
             .user_agent(concat!(

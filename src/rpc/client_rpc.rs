@@ -6,7 +6,7 @@ use crate::{
     common::{
         client::WEB_CLIENT,
         errors::Result,
-        nacos::{self, rpc}, constant::IdpType,
+        nacos::{self, rpc}, constant::ConnectionType,
     },
     dto::{client::{ClientConfig, ClientIdpConfig}, challenge::ChallengeCofig},
 };
@@ -34,7 +34,7 @@ pub async fn fetch_client_config(client_id: &str) -> Result<Option<ClientConfig>
 
 pub async fn fetch_client_idp_config(
     client_id: &str,
-    idp: Option<IdpType>,
+    idp: Option<ConnectionType>,
 ) -> Result<Option<ClientIdpConfig>> {
     let mut request_url = format!("http://forum-server/clients/{client_id}/idps");
     if let Some(idp_type) = idp {

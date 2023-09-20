@@ -1,38 +1,29 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use futures_util::{FutureExt, TryFutureExt};
-use oauth2::{basic::BasicClient, Scope};
 use reqwest::Response;
 use serde_json::Value;
 use tracing::error;
 
-use super::{OAuthUser, OauthClient};
-use crate::common::{client::WEB_CLIENT, errors::Result};
+use crate::{
+    common::{client::WEB_CLIENT, errors::Result},
+    dto::{auth::Flow, user::UserProfile},
+    service::connection::{IdentifierProvider, IdpType, OAuthEndpoint},
+};
 
 #[derive(Clone, Default)]
-pub struct GitHubClient {
-    inner: Option<BasicClient>,
-    server_endpoint: String,
-    profile_endpoint: String,
-    scopes: Vec<Scope>,
+pub struct GitHub {
+    endpoints: OAuthEndpoint,
 }
 
-impl GitHubClient {
-    pub fn new() -> Self {
-        let mut sl = Self {
-            ..Default::default()
-        };
-        let (client, server_endpoint, profile_endpoint, scopes) = sl.init();
-        sl.inner = Some(client);
-        sl.server_endpoint = server_endpoint;
-        sl.profile_endpoint = profile_endpoint;
-        sl.scopes = scopes;
-        sl
+impl GitHub {
+    pub fn new(endpoints: OAuthEndpoint) -> Self {
+        Self { endpoints }
     }
 
-    async fn fetch_profile(&mut self, token: &str) -> Result<Option<OAuthUser>> {
+    async fn fetch_profile(&mut self, token: &str) -> Result<Option<UserProfile>> {
         Ok(WEB_CLIENT
-            .get(self.profile_endpoint.to_string())
+            .get(self.endpoints.profile_endpoint.to_string())
             .bearer_auth(token)
             .send()
             .await
@@ -44,7 +35,7 @@ impl GitHubClient {
             .json::<serde_json::Value>()
             .await
             .map(|v| {
-                let mut oauth_user = OAuthUser::default();
+                let mut oauth_user = UserProfile::default();
                 if let Some(id) = v["id"].as_str() {
                     oauth_user.openid = id.to_string();
                 }
@@ -52,6 +43,9 @@ impl GitHubClient {
                     oauth_user.avatar = avatar.to_string();
                 }
                 if let Some(name) = v["name"].as_str() {
+                    oauth_user.nickname = name.to_string();
+                }
+                if let Some(name) = v["gander"].as_str() {
                     oauth_user.nickname = name.to_string();
                 }
                 oauth_user.extra = serde_json::to_string(&v).unwrap_or_default();
@@ -64,7 +58,7 @@ impl GitHubClient {
         let (email, verified) = WEB_CLIENT
             .get(format!(
                 "{}{}",
-                self.server_endpoint.to_string(),
+                self.endpoints.server_endpoint.to_string(),
                 "/user/emails"
             ))
             .bearer_auth(token)
@@ -98,28 +92,16 @@ impl GitHubClient {
 }
 
 #[async_trait]
-impl OauthClient for GitHubClient {
-    fn kind(&self) -> String {
-        String::from("GITHUB")
+impl IdentifierProvider for GitHub {
+    type Type = IdpType;
+
+    fn authenticate(&self, flow: &Flow) {}
+
+    fn types(&self) -> Self::Type {
+        IdpType::GitHub
     }
 
-    fn client(&mut self) -> BasicClient {
-        self.inner.as_ref().unwrap().to_owned()
-    }
-
-    fn server_endpoint(&mut self) -> String {
-        self.server_endpoint.clone()
-    }
-
-    fn profile_endpoint(&mut self) -> String {
-        self.profile_endpoint.clone()
-    }
-
-    fn scopes(&mut self) -> Vec<Scope> {
-        self.scopes.to_vec()
-    }
-
-    async fn userinfo(&mut self, token: &str) -> Result<Option<OAuthUser>> {
-        self.fetch_profile(token).await
+    fn userinfo(&self) -> String {
+        todo!()
     }
 }

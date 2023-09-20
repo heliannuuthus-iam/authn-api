@@ -16,7 +16,7 @@ use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
         constant::{
-            AuthRequestType, IdpType, PromptType, ResponseType, TokenType, CONFLICT_RESPONSE_TYPE,
+            AuthRequestType, ConnectionType, PromptType, ResponseType, TokenType, CONFLICT_RESPONSE_TYPE,
             OPENID_SCOPE,
         },
         errors::{ApiError, Result},
@@ -83,11 +83,8 @@ pub struct Flow {
     pub client_config: Option<ClientIdpConfig>,
     pub authorization_code: Option<AuthNCodeResponse>,
     pub tokens: Option<Tokens>,
-    pub current: Option<UserProfile>,
     pub subject: Option<UserProfile>,
-    pub oauth_user: Option<OAuthUser>,
     pub associations: Vec<UserAssociation>,
-    pub connections: HashMap<String, Connection>,
     pub stage: FlowStage,
     pub error: Option<AuthError>,
     message: Option<String>,
