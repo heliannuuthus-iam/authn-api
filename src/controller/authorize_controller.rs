@@ -50,6 +50,8 @@ async fn authorize(params: &AuthRequest) -> Result<impl Responder> {
     // flow 校验
     flow.validate()?;
 
+    auth_service::build_connection(&mut flow).await?;
+
     Ok(HttpResponse::build(StatusCode::MOVED_PERMANENTLY)
         .append_header((header::LOCATION, flow.request.redirect_uri))
         .cookie(CookieBuilder::new("heliannuuthus", flow.id).finish())

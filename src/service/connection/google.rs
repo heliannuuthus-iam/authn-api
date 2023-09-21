@@ -11,12 +11,12 @@ use crate::{
         auth::Flow,
         user::{IdpUser, UserProfile},
     },
-    service::connection::IdpType,
+    service::connection::{Connection, IdpType},
 };
-lazy_static::lazy_static!(
-    pub static ref GOOGLE_CLIENT: Google = Google::new();
-);
-#[derive(Clone, Default)]
+// lazy_static::lazy_static!(
+//     pub static ref GOOGLE_CLIENT: Google = Google::new();
+// );
+#[derive(Clone)]
 pub struct Google {
     endpoints: OAuthEndpoint,
 }
@@ -27,22 +27,30 @@ impl Google {
     }
 }
 
+#[async_trait]
+impl Connection for Google {
+    async fn verify(
+        &self,
+        identifier: Option<&str>,
+        proof: &str,
+        state: Option<&str>,
+        flow: &Flow,
+    ) {
+    }
+}
+
 #[async_trait::async_trait]
 impl IdentifierProvider for Google {
     type Type = IdpType;
 
-    async fn authorize(&self, flow: &mut Flow) -> String {
-        todo!()
-    }
-
-    fn types(&self) -> Self::Type {
-        IdpType::Google
+    async fn authorize(&self, flow: &mut Flow) -> Result<String> {
+        Ok("".to_string())
     }
 
     async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>> {
         let body = WEB_CLIENT
-            .get(self.profile_endpoint.as_str())
-            .bearer_auth(token)
+            .get(self.endpoints.profile_endpoint.as_str())
+            .bearer_auth(proof)
             .send()
             .await
             .and_then(Response::error_for_status)
@@ -71,5 +79,9 @@ impl IdentifierProvider for Google {
         }
         oauth_user.extra = serde_json::to_string(&body).unwrap_or_default();
         Ok(Some(oauth_user))
+    }
+
+    fn types(&self) -> Self::Type {
+        IdpType::Google
     }
 }

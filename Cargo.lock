@@ -898,6 +898,7 @@ dependencies = [
  "tera",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-actix-web",
  "tracing-appender",

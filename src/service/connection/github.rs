@@ -1,5 +1,8 @@
-use std::{collections::hash_map::RandomState, str::FromStr, sync::OnceState};
-use std::collections::HashMap;
+use std::{
+    collections::{hash_map::RandomState, HashMap},
+    str::FromStr,
+    sync::OnceState,
+};
 
 use actix_web::error::{ErrorBadRequest, ErrorMisdirectedRequest};
 use anyhow::Context;
@@ -7,6 +10,7 @@ use async_trait::async_trait;
 use chrono::Duration;
 use futures_util::{FutureExt, TryFutureExt};
 use http::Uri;
+use openssl_sys::stat;
 use reqwest::Response;
 use serde_json::Value;
 use tracing::error;
@@ -24,13 +28,13 @@ use crate::{
         auth::{AuthError, Flow},
         user::{IdpUser, UserProfile},
     },
-    service::connection::{IdentifierProvider, IdpType, OAuthEndpoint},
+    service::connection::{Connection, IdentifierProvider, IdpType, OAuthEndpoint},
 };
 
-lazy_static::lazy_static! {
-    pub static ref GITHUB_CLIENT: GitHub = GitHub::new();
-}
-#[derive(Clone, Default)]
+// lazy_static::lazy_static! {
+//     pub static ref GITHUB_CLIENT: GitHub = GitHub::new();
+// }
+#[derive(Clone)]
 pub struct GitHub {
     endpoints: OAuthEndpoint,
 }
@@ -40,10 +44,24 @@ impl GitHub {
         Self { endpoints }
     }
 
-    async fn exchange_token(&mut self, flow: &Flow) -> Result<String> {
-        let form = HashMap::with_capacity(4);
-        form.insert("client_id", )
-        WEB_CLIENT.post(&self.endpoints.token_endpoint).form(form)
+    async fn exchange_token(&self, code: &str, state: &str, flow: &Flow) -> Result<String> {
+        // HashMap::with_capacity(4);
+        // if let Some(config) = flow
+        //     .client_config
+        //     .unwrap()
+        //     .idp_configs
+        //     .iter()
+        //     .find(|&idp| self.types().eq(&idp.idp_type))
+        // {
+        //     form.insert("client_id", config.idp_client_id.as_str());
+        //     form.insert("client_secret", config.idp_client_secret.as_str());
+        //     form.insert("code", code);
+        //     form.insert("state", state);
+        //     &WEB_CLIENT.post(&self.endpoints.token_endpoint).form(&form)
+        // } else {
+        //     
+        // };
+        Ok("".to_string())
     }
 
     async fn fetch_profile(&mut self, token: &str) -> Result<Option<IdpUser>> {
@@ -60,7 +78,7 @@ impl GitHub {
             .json::<serde_json::Value>()
             .await
             .map(|v| {
-                let mut oauth_user = UserProfile::default();
+                let mut oauth_user = IdpUser::default();
                 if let Some(id) = v["id"].as_str() {
                     oauth_user.openid = id.to_string();
                 }
@@ -126,20 +144,21 @@ impl IdentifierProvider for GitHub {
             .unwrap()
             .idp_configs
             .iter()
-            .filter(|&idp| self.types().eq(idp))
+            .filter(|&idp| self.types().eq(&idp.idp_type))
             .next()
         {
             let (_, state) = self.pkce(flow).await?;
             Ok(Url::parse(&self.endpoints.authorize_endpoint)
-                .map(|s| {
-                    s.query_pairs_mut()
+                .map(|mut tmp| {
+                    tmp.query_pairs_mut()
                         .append_pair("client_id", &idp_config.idp_client_id)
                         .append_pair(
                             "redirect_uri",
-                            env_var_default(
+                            env_var_default::<String>(
                                 "GITHUB_REDIRECT_URL",
-                                "https://auth.heliannuuthus.com/api/callback/github",
-                            ),
+                                "https://auth.heliannuuthus.com/api/callback/github".to_string(),
+                            )
+                            .as_str(),
                         )
                         .append_pair("scope", "read:user user:email")
                         .append_pair("state", &state)
@@ -158,9 +177,26 @@ impl IdentifierProvider for GitHub {
         }
     }
 
+    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>> {
+        Ok(None)
+    }
+
     fn types(&self) -> Self::Type {
         IdpType::GitHub
     }
+}
 
-    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>> {}
+#[async_trait]
+impl Connection for GitHub {
+    async fn verify(
+        &self,
+        identifier: Option<&str>,
+        proof: &str,
+        state: Option<&str>,
+        flow: &Flow,
+    ) {
+        self.exchange_token(proof, state.unwrap(), flow)
+            .await
+            .unwrap();
+    }
 }

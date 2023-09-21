@@ -52,3 +52,4 @@ utoipa = { version = "3.5.0", features = ["actix_extras", "chrono"] }
 utoipa-redoc = { version = "0.1.0", features = ["actix-web"] }
 url = { version = "2.4.1", features = [] }
 pkce = "0.2.0"
+tokio-stream = "0.1.14"

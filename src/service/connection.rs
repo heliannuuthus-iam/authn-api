@@ -1,10 +1,9 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use actix_web::error::ErrorBadRequest;
 use chrono::Duration;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use self::{github::GITHUB_CLIENT, google::GOOGLE_CLIENT};
 use crate::{
     common::{
         cache::redis::redis_setex,
@@ -17,43 +16,7 @@ use crate::{
 pub mod github;
 pub mod google;
 
-#[async_trait::async_trait]
-pub trait Connection: MFA + IdentifierProvider {
-    async fn verify();
-}
-
-#[async_trait::async_trait]
-pub trait MFA {}
-
-#[async_trait::async_trait]
-pub trait IdentifierProvider {
-    type Type;
-
-    async fn pkce(&self, flow: &Flow) -> Result<(String, String)> {
-        let code_verifier = encode64(&pkce::code_verifier(128));
-        let state = gen_random(16);
-        redis_setex(
-            format!("forum:oauth:pkce:{}", state).as_str(),
-            &code_verifier,
-            Duration::minutes(10),
-        )
-        .await?;
-        redis_setex(
-            format!("forum:oauth:flow:{}", state).as_str(),
-            flow.clone(),
-            Duration::minutes(10),
-        )
-        .await?;
-        Ok((code_verifier, state))
-    }
-
-    async fn authorize(&self, flow: &mut Flow) -> String;
-
-    fn types(&self) -> Self::Type;
-
-    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>>;
-}
-
+#[derive(Clone)]
 pub struct OAuthEndpoint {
     pub server_endpoint: String,
     pub authorize_endpoint: String,
@@ -93,12 +56,47 @@ impl From<String> for IdpType {
     }
 }
 
-pub fn select_connection_client(idp_type: &IdpType) -> Result<Box<dyn IdentifierProvider>> {
+pub fn select_connection_client(idp_type: &IdpType) -> Result<Box<dyn Connection>> {
     match idp_type {
-        IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
-        IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
+        // IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
+        // IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
         _ => Err(ApiError::ResponseError(ErrorBadRequest(format!(
             "unknwon idp type({idp_type})"
         )))),
     }
+}
+
+#[async_trait::async_trait]
+pub trait Connection: Serialize + DeserializeOwned + Debug {
+    async fn verify(&self, identifier: Option<&str>, proof: &str, state: Option<&str>, flow: &Flow);
+}
+
+#[async_trait::async_trait]
+pub trait MFA: Connection {}
+
+#[async_trait::async_trait]
+pub trait IdentifierProvider: Connection {
+    type Type;
+
+    async fn pkce(&self, flow: &Flow) -> Result<(String, String)> {
+        let code_verifier = encode64(&pkce::code_verifier(128));
+        let state = gen_random(16);
+        redis_setex(
+            format!("forum:oauth:pkce:{}", state).as_str(),
+            &code_verifier,
+            Duration::minutes(10),
+        )
+        .await?;
+        redis_setex(
+            format!("forum:oauth:flow:{}", state).as_str(),
+            flow.clone(),
+            Duration::minutes(10),
+        )
+        .await?;
+        Ok((code_verifier, state))
+    }
+
+    async fn authorize(&self, flow: &mut Flow) -> Result<String>;
+    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>>;
+    fn types(&self) -> Self::Type;
 }

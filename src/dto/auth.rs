@@ -93,7 +93,6 @@ pub struct Flow {
     pub flow_type: Vec<AuthRequestType>,
     pub client_config: Option<ClientIdpConfig>,
     pub authorization_code: Option<AuthorizationCode>,
-    pub connections: Vec<dyn Connection>,
     pub tokens: Option<Tokens>,
     pub subject: Option<UserProfile>,
     pub associations: Vec<UserAssociation>,
