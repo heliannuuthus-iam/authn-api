@@ -3,13 +3,8 @@ use futures_util::TryFutureExt;
 use http::StatusCode;
 use reqwest::Response;
 
-
 use crate::{
-    common::{
-        client::WEB_CLIENT,
-        errors::{Result},
-        nacos,
-    },
+    common::{client::WEB_CLIENT, errors::Result, nacos},
     dto::password::SrpPassword,
 };
 

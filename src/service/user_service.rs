@@ -19,11 +19,7 @@ use crate::{
 pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)> {
     let srp_meta = match password_rpc::fetch_srp_password(i).await? {
         Some(meta) => meta,
-        None => {
-            return Err(ApiError::Response(ErrorUnauthorized(
-                "invalid_identifier",
-            )))
-        }
+        None => return Err(ApiError::Response(ErrorUnauthorized("invalid_identifier"))),
     };
     let srp_server = SrpServer::new(&G_2048);
     let rng = SystemRandom::new();

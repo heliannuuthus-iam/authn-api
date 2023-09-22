@@ -1,6 +1,6 @@
 pub mod auth;
-pub mod client;
-pub mod sms;
-pub mod password;
-pub mod user;
 pub mod challenge;
+pub mod client;
+pub mod password;
+pub mod sms;
+pub mod user;

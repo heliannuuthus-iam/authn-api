@@ -1,6 +1,1 @@
-
-
-
-pub async fn generate_token() {
-    
-}
+pub async fn generate_token() {}
