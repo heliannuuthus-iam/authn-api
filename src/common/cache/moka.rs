@@ -4,7 +4,7 @@ use crate::{
     common::{config::env_var_default, errors::Result},
     dto::{
         challenge::ChallengeCofig,
-        client::{ClientConfig, ClientIdpConfig},
+        client::{ClientConfig, ClientIdpConfigs},
     },
     rpc::client_rpc,
 };
@@ -19,7 +19,7 @@ static ref CLIENT_CONFIG_CACHE: moka::future::Cache::<String, ClientConfig> = mo
           .unwrap(),
   )
   .build();
-static ref IDP_CONFIG_CACHE: moka::future::Cache::<String, ClientIdpConfig> = moka::future::Cache::builder()
+static ref IDP_CONFIG_CACHE: moka::future::Cache::<String, ClientIdpConfigs> = moka::future::Cache::builder()
   .name("client_idp_config_cache")
   .time_to_live(
       Duration::seconds(env_var_default::<i64>("CACHE_EXPIRES", 600))
@@ -52,7 +52,7 @@ pub async fn get_client_config(client_id: &str) -> Result<Option<ClientConfig>> 
     })
 }
 
-pub async fn get_idp_config(client_id: &str) -> Result<Option<ClientIdpConfig>> {
+pub async fn get_idp_config(client_id: &str) -> Result<Option<ClientIdpConfigs>> {
     Ok(match IDP_CONFIG_CACHE.get(client_id).await {
         Some(client) => Some(client),
         None => match client_rpc::fetch_client_idp_config(client_id, None).await? {

@@ -62,7 +62,7 @@ pub async fn init_nacos() {
 
 pub async fn rpc(uri: &str) -> Result<Url> {
     let mut url = Url::parse(uri).context("rpc uri parse failed")?;
-    let service_name = url.host_str().ok_or(ApiError::ResponseError(ErrorNotFound(
+    let service_name = url.host_str().ok_or(ApiError::Response(ErrorNotFound(
         "service_name parse failed",
     )))?;
     let instant = NACOS_CLIENT

@@ -10,10 +10,10 @@ use crate::{
 
 #[get("/challenge")]
 pub async fn code_challenge(Json(cq): Json<ChallengeRequest>) -> Result<impl Responder> {
-    let config = match moka::get_challenge_config(&cq.client_id).await? {
+    let _config = match moka::get_challenge_config(&cq.client_id).await? {
         Some(config) => config,
         None => {
-            return Err(ApiError::ResponseError(ErrorBadRequest(
+            return Err(ApiError::Response(ErrorBadRequest(
                 "invalid challenge config",
             )))
         }

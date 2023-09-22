@@ -1,29 +1,33 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use oauth2::{basic::BasicClient, Scope};
 use reqwest::Response;
 use serde_json::Value;
 
-use super::{IdentifierProvider, OAuthEndpoint};
+use super::{IdentifierProvider, OAuthEndpoint, OAuthEndpointBuilder};
 use crate::{
-    common::{client::WEB_CLIENT, errors::Result},
-    dto::{
-        auth::Flow,
-        user::{IdpUser, UserProfile},
-    },
+    common::{client::WEB_CLIENT, config::env_var, errors::Result},
+    dto::{auth::Flow, client::ClientIdpConfig, user::IdpUser},
     service::connection::{Connection, IdpType},
 };
-// lazy_static::lazy_static!(
-//     pub static ref GOOGLE_CLIENT: Google = Google::new();
-// );
+lazy_static::lazy_static!(
+    pub static ref GOOGLE_CLIENT: Google = Google::default();
+);
 #[derive(Clone)]
 pub struct Google {
     endpoints: OAuthEndpoint,
 }
 
-impl Google {
-    pub fn new(endpoints: OAuthEndpoint) -> Self {
-        Self { endpoints }
+impl Default for Google {
+    fn default() -> Self {
+        Self {
+            endpoints: OAuthEndpointBuilder::default()
+                .authorize_endpoint(env_var::<String>("GOOGLE_AUTHORIZE_ENDPOINT"))
+                .token_endpoint(env_var::<String>("GOOGLE_TOKEN_ENDPOINT"))
+                .server_endpoint(env_var::<String>("GOOGLE_SERVER_ENDPOINT"))
+                .profile_endpoint(env_var::<String>("GOOGLE_PROFILE_ENDPOINT"))
+                .build()
+                .unwrap(),
+        }
     }
 }
 
@@ -31,10 +35,10 @@ impl Google {
 impl Connection for Google {
     async fn verify(
         &self,
-        identifier: Option<&str>,
-        proof: &str,
-        state: Option<&str>,
-        flow: &Flow,
+        _identifier: Option<&str>,
+        _proof: &str,
+        _state: Option<&str>,
+        _flow: &Flow,
     ) {
     }
 }
@@ -43,7 +47,11 @@ impl Connection for Google {
 impl IdentifierProvider for Google {
     type Type = IdpType;
 
-    async fn authorize(&self, flow: &mut Flow) -> Result<String> {
+    async fn authorize_link(
+        &self,
+        _config: &ClientIdpConfig,
+        _extra: Vec<(&str, &str)>,
+    ) -> Result<String> {
         Ok("".to_string())
     }
 

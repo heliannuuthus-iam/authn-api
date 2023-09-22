@@ -20,7 +20,7 @@ pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)>
     let srp_meta = match password_rpc::fetch_srp_password(i).await? {
         Some(meta) => meta,
         None => {
-            return Err(ApiError::ResponseError(ErrorUnauthorized(
+            return Err(ApiError::Response(ErrorUnauthorized(
                 "invalid_identifier",
             )))
         }
@@ -56,14 +56,14 @@ pub async fn srp_login(identifier: &str, m1: &str) -> Result<()> {
     let server_verifier =
         redis_get::<SrpServerVerifier>(format!("forum:auth:srp:{identifier}").as_str())
             .await?
-            .ok_or(ApiError::ResponseError(ErrorBadRequest("pre login first")))?;
+            .ok_or(ApiError::Response(ErrorBadRequest("pre login first")))?;
     let m1 = hex::decode(m1).with_context(|| {
         tracing::error!("client m1 decode failed");
         format!("client m1 decode failed")
     })?;
     server_verifier.verify_client(&m1).map_err(|e| {
         tracing::error!("verify client m1 failed, {:?}", e);
-        ApiError::ResponseError(ErrorUnauthorized("verify failed"))
+        ApiError::Response(ErrorUnauthorized("verify failed"))
     })?;
     Ok(())
 }

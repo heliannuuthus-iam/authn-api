@@ -1,17 +1,15 @@
 use actix_web::{
     get, post,
-    web::{Form, Json, Query},
-    HttpRequest, HttpResponse, Responder,
+    web::{Form, Json, Query}, HttpResponse, Responder,
 };
 use http::{header, StatusCode};
 
 use crate::{
     common::errors::Result,
     dto::{
-        auth::validate_flow,
         password::{PreSrpRequest, PreSrpRespose, SrpPassword, SrpRequest},
     },
-    service::{auth_service, user_service},
+    service::{user_service},
 };
 
 #[post("/registry")]

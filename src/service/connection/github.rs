@@ -1,50 +1,45 @@
-use std::{
-    collections::{hash_map::RandomState, HashMap},
-    str::FromStr,
-    sync::OnceState,
-};
-
-use actix_web::error::{ErrorBadRequest, ErrorMisdirectedRequest};
 use anyhow::Context;
 use async_trait::async_trait;
-use chrono::Duration;
 use futures_util::{FutureExt, TryFutureExt};
-use http::Uri;
-use openssl_sys::stat;
 use reqwest::Response;
 use serde_json::Value;
 use tracing::error;
 use url::Url;
 
+use super::OAuthEndpointBuilder;
 use crate::{
     common::{
-        cache::redis::redis_setex,
         client::WEB_CLIENT,
-        config::env_var_default,
-        errors::{ApiError, Result},
-        utils::gen_random,
+        config::{env_var, env_var_default},
+        errors::Result,
     },
-    dto::{
-        auth::{AuthError, Flow},
-        user::{IdpUser, UserProfile},
-    },
+    dto::{auth::Flow, client::ClientIdpConfig, user::IdpUser},
     service::connection::{Connection, IdentifierProvider, IdpType, OAuthEndpoint},
 };
-
-// lazy_static::lazy_static! {
-//     pub static ref GITHUB_CLIENT: GitHub = GitHub::new();
-// }
+lazy_static::lazy_static! {
+    pub static ref GITHUB_CLIENT: GitHub = GitHub::default();
+}
 #[derive(Clone)]
 pub struct GitHub {
     endpoints: OAuthEndpoint,
 }
 
-impl GitHub {
-    pub fn new(endpoints: OAuthEndpoint) -> Self {
-        Self { endpoints }
+impl Default for GitHub {
+    fn default() -> Self {
+        Self {
+            endpoints: OAuthEndpointBuilder::default()
+                .authorize_endpoint(env_var::<String>("GITHUB_AUTHORIZE_ENDPOINT"))
+                .token_endpoint(env_var::<String>("GITHUB_TOKEN_ENDPOINT"))
+                .server_endpoint(env_var::<String>("GITHUB_SERVER_ENDPOINT"))
+                .profile_endpoint(env_var::<String>("GITHUB_PROFILE_ENDPOINT"))
+                .build()
+                .unwrap(),
+        }
     }
+}
 
-    async fn exchange_token(&self, code: &str, state: &str, flow: &Flow) -> Result<String> {
+impl GitHub {
+    async fn exchange_token(&self, _code: &str, _state: &str, _flow: &Flow) -> Result<String> {
         // HashMap::with_capacity(4);
         // if let Some(config) = flow
         //     .client_config
@@ -59,7 +54,7 @@ impl GitHub {
         //     form.insert("state", state);
         //     &WEB_CLIENT.post(&self.endpoints.token_endpoint).form(&form)
         // } else {
-        //     
+        //
         // };
         Ok("".to_string())
     }
@@ -138,46 +133,38 @@ impl GitHub {
 impl IdentifierProvider for GitHub {
     type Type = IdpType;
 
-    async fn authorize(&self, flow: &mut Flow) -> Result<String> {
-        if let Some(idp_config) = &flow
-            .client_config
-            .unwrap()
-            .idp_configs
-            .iter()
-            .filter(|&idp| self.types().eq(&idp.idp_type))
-            .next()
-        {
-            let (_, state) = self.pkce(flow).await?;
-            Ok(Url::parse(&self.endpoints.authorize_endpoint)
-                .map(|mut tmp| {
-                    tmp.query_pairs_mut()
-                        .append_pair("client_id", &idp_config.idp_client_id)
-                        .append_pair(
-                            "redirect_uri",
-                            env_var_default::<String>(
-                                "GITHUB_REDIRECT_URL",
-                                "https://auth.heliannuuthus.com/api/callback/github".to_string(),
-                            )
-                            .as_str(),
+    async fn authorize_link(
+        &self,
+        config: &ClientIdpConfig,
+        extra: Vec<(&str, &str)>,
+    ) -> Result<String> {
+        Ok(Url::parse(&self.endpoints.authorize_endpoint)
+            .map(|mut tmp| {
+                let mut url_query = tmp.query_pairs_mut();
+                url_query
+                    .append_pair("client_id", &config.idp_client_id)
+                    .append_pair(
+                        "redirect_uri",
+                        env_var_default::<String>(
+                            "GITHUB_REDIRECT_URL",
+                            "https://auth.heliannuuthus.com/api/callback/github".to_string(),
                         )
-                        .append_pair("scope", "read:user user:email")
-                        .append_pair("state", &state)
-                })
-                .with_context(|| {
-                    let msg = "github authorize url assemble failed";
-                    tracing::info!(msg);
-                    msg
-                })?
-                .finish()
-                .to_string())
-        } else {
-            Err(ApiError::ResponseError(ErrorMisdirectedRequest(
-                "unsupported connection",
-            )))
-        }
+                        .as_str(),
+                    )
+                    .append_pair("scope", "read:user user:email");
+                for (name, value) in extra {
+                    url_query.append_pair(name, value);
+                }
+                url_query.finish().to_string()
+            })
+            .with_context(|| {
+                let msg = "github authorize url assemble failed";
+                tracing::info!(msg);
+                msg
+            })?)
     }
 
-    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>> {
+    async fn userinfo(&mut self, _proof: &str) -> Result<Option<IdpUser>> {
         Ok(None)
     }
 
@@ -190,7 +177,7 @@ impl IdentifierProvider for GitHub {
 impl Connection for GitHub {
     async fn verify(
         &self,
-        identifier: Option<&str>,
+        _identifier: Option<&str>,
         proof: &str,
         state: Option<&str>,
         flow: &Flow,

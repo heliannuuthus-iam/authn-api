@@ -1,33 +1,20 @@
 use std::collections::HashMap;
 
-use tokio_stream::{self as stream};
+use super::connection::{self};
+use crate::{common::errors::Result, dto::auth::Flow};
 
-use super::connection;
-use crate::{
-    common::{
-        cache::redis::redis_get,
-        errors::{ApiError, Result},
-    },
-    dto::{
-        auth::{Flow, FlowStage},
-        user::UserProfile,
-    },
-    rpc::user_rpc::get_user_associations,
-    service::connection::Connection,
-};
-
-// 生成认证链接
-pub async fn build_connection(flow: &mut Flow) -> Result<HashMap<String, Box<dyn Connection>>> {
-    let idps: &Vec<crate::dto::client::ClientIdp> =
-        &flow.client_config.as_ref().unwrap().idp_configs;
-        
-    let mut res: HashMap<String, Box<dyn Connection>> = HashMap::with_capacity(idps.len());
-
-    for idp in idps {
-        res.insert(
-            idp.idp_type.to_string(),
-            connection::select_connection_client(&idp.idp_type)?,
+// 生成 idp 认证链接
+pub async fn build_idp(flow: &Flow) -> Result<HashMap<String, String>> {
+    let idps = &flow.client_idp_configs.as_ref().unwrap().configs;
+    let mut idp_links: HashMap<String, String> = HashMap::with_capacity(idps.len());
+    for idp in idps.keys() {
+        if connection::select_identifier_provider(idp).ok().is_none() {
+            continue;
+        }
+        idp_links.insert(
+            idp.to_string(),
+            format!("https://auth.heliannuuthus.com/api/oauth/{:?}", idp),
         );
     }
-    Ok(res)
+    Ok(idp_links.clone())
 }

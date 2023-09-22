@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{time::Duration};
 
 use actix_web::{
     cookie::Cookie,
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 use validator::Validate;
 
-use super::client::ClientIdpConfig;
+use super::client::{ClientConfig, ClientIdpConfigs};
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
@@ -24,7 +24,6 @@ use crate::{
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
-    service::connection::Connection,
 };
 
 #[derive(Debug, Clone, thiserror::Error, serde::Deserialize, serde::Serialize)]
@@ -91,7 +90,8 @@ pub struct Flow {
     pub id: String,
     pub request: AuthRequest,
     pub flow_type: Vec<AuthRequestType>,
-    pub client_config: Option<ClientIdpConfig>,
+    pub client_config: Option<ClientConfig>,
+    pub client_idp_configs: Option<ClientIdpConfigs>,
     pub authorization_code: Option<AuthorizationCode>,
     pub tokens: Option<Tokens>,
     pub subject: Option<UserProfile>,
@@ -116,10 +116,10 @@ impl Flow {
     }
 
     pub fn validate(&mut self) -> Result<()> {
-        let redirect_url = &self.client_config.as_ref().unwrap().client.redirect_url;
+        let redirect_url = &self.client_config.as_ref().unwrap().redirect_url;
         // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-insufficient-redirect-uri-v
         if !redirect_url.contains(&self.request.redirect_uri) {
-            return Err(ApiError::ResponseError(ErrorUnauthorized(
+            return Err(ApiError::Response(ErrorUnauthorized(
                 "invalid_redirect_url",
             )));
         };
@@ -132,11 +132,11 @@ impl Flow {
             .count()
             == CONFLICT_RESPONSE_TYPE.len()
         {
-            return Err(ApiError::ResponseError(ErrorUnauthorized(
+            return Err(ApiError::Response(ErrorUnauthorized(
                 "conflict_response_type",
             )));
         }
-        let mut flow_types = &self.flow_type;
+        let flow_types = &mut self.flow_type;
         // https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
         if self.request.scope.contains(&OPENID_SCOPE.to_string()) {
             flow_types.push(AuthRequestType::Oidc);
@@ -204,20 +204,20 @@ impl Flow {
 pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
     let session = req
         .cookie("auth_session")
-        .ok_or(ApiError::ResponseError(ErrorPreconditionFailed(
+        .ok_or(ApiError::Response(ErrorPreconditionFailed(
             "auth_session is lacked",
         )))
         .map(|c| c.value().to_owned())?;
 
     redis_get::<Flow>(format!("forum:auth:flow:{}", session).as_str())
         .await
-        .map_err(|_| ApiError::ResponseError(ErrorPreconditionFailed("session is nonexsistent")))?
-        .ok_or(ApiError::ResponseError(ErrorPreconditionFailed(
+        .map_err(|_| ApiError::Response(ErrorPreconditionFailed("session is nonexsistent")))?
+        .ok_or(ApiError::Response(ErrorPreconditionFailed(
             "session is expired",
         )))
         .and_then(|f| {
             if f.expires_at < Utc::now() {
-                return Err(ApiError::ResponseError(ErrorPreconditionFailed(
+                return Err(ApiError::Response(ErrorPreconditionFailed(
                     "session is expired",
                 )));
             }
@@ -228,7 +228,7 @@ pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
 async fn persist_flow(flow: &'_ Flow) -> Result<&'_ Flow> {
     let now = Utc::now();
     if flow.expires_at < now {
-        Err(ApiError::ResponseError(ErrorPreconditionFailed(
+        Err(ApiError::Response(ErrorPreconditionFailed(
             "session is expired",
         )))
     } else {

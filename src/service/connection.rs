@@ -2,21 +2,23 @@ use std::fmt::{Debug, Display};
 
 use actix_web::error::ErrorBadRequest;
 use chrono::Duration;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use derive_builder::Builder;
+use serde::{Deserialize, Serialize};
 
+use self::{github::GITHUB_CLIENT, google::GOOGLE_CLIENT};
 use crate::{
     common::{
         cache::redis::redis_setex,
         errors::{ApiError, Result},
         utils::{encode64, gen_random},
     },
-    dto::{auth::Flow, user::IdpUser},
+    dto::{auth::Flow, client::ClientIdpConfig, user::IdpUser},
 };
 
 pub mod github;
 pub mod google;
 
-#[derive(Clone)]
+#[derive(Clone, Builder)]
 pub struct OAuthEndpoint {
     pub server_endpoint: String,
     pub authorize_endpoint: String,
@@ -24,7 +26,7 @@ pub struct OAuthEndpoint {
     pub profile_endpoint: String,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Hash, Copy, Eq, PartialEq)]
 pub enum IdpType {
     #[serde(rename = "github")]
     GitHub,
@@ -56,26 +58,25 @@ impl From<String> for IdpType {
     }
 }
 
-pub fn select_connection_client(idp_type: &IdpType) -> Result<Box<dyn Connection>> {
+pub fn select_identifier_provider(
+    idp_type: &IdpType,
+) -> Result<Box<dyn IdentifierProvider<Type = IdpType>>> {
     match idp_type {
-        // IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
-        // IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
-        _ => Err(ApiError::ResponseError(ErrorBadRequest(format!(
+        IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
+        IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
+        _ => Err(ApiError::Response(ErrorBadRequest(format!(
             "unknwon idp type({idp_type})"
         )))),
     }
 }
 
 #[async_trait::async_trait]
-pub trait Connection: Serialize + DeserializeOwned + Debug {
+pub trait Connection {
     async fn verify(&self, identifier: Option<&str>, proof: &str, state: Option<&str>, flow: &Flow);
 }
 
 #[async_trait::async_trait]
-pub trait MFA: Connection {}
-
-#[async_trait::async_trait]
-pub trait IdentifierProvider: Connection {
+pub trait IdentifierProvider {
     type Type;
 
     async fn pkce(&self, flow: &Flow) -> Result<(String, String)> {
@@ -89,14 +90,17 @@ pub trait IdentifierProvider: Connection {
         .await?;
         redis_setex(
             format!("forum:oauth:flow:{}", state).as_str(),
-            flow.clone(),
+            flow,
             Duration::minutes(10),
         )
         .await?;
         Ok((code_verifier, state))
     }
-
-    async fn authorize(&self, flow: &mut Flow) -> Result<String>;
+    async fn authorize_link(
+        &self,
+        config: &ClientIdpConfig,
+        extra: Vec<(&str, &str)>,
+    ) -> Result<String>;
     async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>>;
     fn types(&self) -> Self::Type;
 }

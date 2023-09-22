@@ -17,35 +17,32 @@ use ring::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter};
 
-use super::{constant::TOKEN_ISSUER, utils::gen_id};
-use crate::{
-    common::constant::{Gander, TokenType},
-    dto::user::UserProfile,
-};
+use super::utils::gen_id;
+use crate::{common::constant::Gander, dto::user::UserProfile};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IdToken {
     #[serde(flatten)]
-    token: TokenCalims,
-    email: String,
-    picture: String,
-    name: String,
-    gander: Gander,
+    pub token: TokenCalims,
+    pub email: Option<String>,
+    pub picture: String,
+    pub name: String,
+    pub gander: Gander,
 }
 
 impl IdToken {
     pub fn new(client_id: &str, user: &UserProfile, expires_in: Duration) -> Self {
         Self {
             token: TokenCalims::new(
-                format!("https://auth.heliannuuthus.com/issuer/{}", client_id),
-                user.openid,
-                client_id.to_string(),
+                format!("https://auth.heliannuuthus.com/issuer/{}", client_id).as_str(),
+                &user.openid,
+                client_id,
                 expires_in,
             ),
-            email: user.email.unwrap(),
-            picture: user.avatar,
-            name:  user.nickname,
-            gander: user.gander,
+            email: user.email.clone(),
+            picture: user.avatar.clone(),
+            name: user.nickname.clone(),
+            gander: user.gander.clone(),
         }
     }
 }
@@ -53,9 +50,9 @@ impl IdToken {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccessToken {
     #[serde(flatten)]
-    token: TokenCalims,
-    azp: String,
-    scope: Vec<String>,
+    pub token: TokenCalims,
+    pub azp: String,
+    pub scope: Vec<String>,
 }
 
 impl AccessToken {
@@ -68,9 +65,9 @@ impl AccessToken {
     ) -> Self {
         Self {
             token: TokenCalims::new(
-                format!("https://auth.heliannuuthus.com/issuer/{}", azp),
-                subject.to_string(),
-                audience.to_string(),
+                format!("https://auth.heliannuuthus.com/issuer/{}", azp).as_str(),
+                subject,
+                audience,
                 expires_in,
             ),
             azp: azp.to_string(),
@@ -81,35 +78,35 @@ impl AccessToken {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct TokenCalims {
-    iss: String,
-    sub: String,
+    pub iss: String,
+    pub sub: String,
     // audience using single resource server
     // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-access-token-privilege-rest
-    aud: String,
+    pub aud: String,
     #[serde(
         serialize_with = "serialize_to_ts",
         deserialize_with = "deserialize_to_ts"
     )]
-    exp: DateTime<Utc>,
+    pub exp: DateTime<Utc>,
     #[serde(
         serialize_with = "serialize_to_ts",
         deserialize_with = "deserialize_to_ts"
     )]
-    nbf: DateTime<Utc>,
+    pub nbf: DateTime<Utc>,
     #[serde(
         serialize_with = "serialize_to_ts",
         deserialize_with = "deserialize_to_ts"
     )]
-    iat: DateTime<Utc>,
-    jti: String,
+    pub iat: DateTime<Utc>,
+    pub jti: String,
 }
 
 impl TokenCalims {
-    pub fn new(iss: String, sub: String, aud: String, expires_in: std::time::Duration) -> Self {
+    pub fn new(iss: &str, sub: &str, aud: &str, expires_in: std::time::Duration) -> Self {
         Self {
-            iss,
-            sub,
-            aud,
+            iss: iss.to_string(),
+            sub: sub.to_string(),
+            aud: aud.to_string(),
             exp: Utc::now() + chrono::Duration::from_std(expires_in).unwrap(),
             nbf: Utc::now() - chrono::Duration::minutes(5),
             iat: Utc::now(),

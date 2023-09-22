@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 use serde::{Deserialize, Serialize};
 
@@ -13,16 +13,24 @@ pub struct ClientConfig {
     pub secret: String,
     pub redirect_url: Vec<String>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ClientIdpConfigs {
+    pub client_id: String,
+    pub configs: HashMap<IdpType, ClientIdpConfig>,
+}
+
+impl ClientIdpConfigs {
+    pub fn new(client_id: String, configs: HashMap<IdpType, ClientIdpConfig>) -> Self {
+        Self { client_id, configs }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ClientIdp {
+pub struct ClientIdpConfig {
     pub idp_type: IdpType,
     pub idp_client_id: String,
     pub idp_client_secret: String,
-}
-#[derive(Serialize, Deserialize, Clone, Default, Debug)]
-pub struct ClientIdpConfig {
-    pub client: ClientConfig,
-    pub idp_configs: Vec<ClientIdp>,
 }
 
 impl Debug for ClientConfig {
@@ -37,7 +45,7 @@ impl Debug for ClientConfig {
     }
 }
 
-impl Debug for ClientIdp {
+impl Debug for ClientIdpConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientIdp")
             .field("idp_type", &self.idp_type)

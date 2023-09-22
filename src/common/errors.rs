@@ -23,17 +23,17 @@ pub enum ConfigError {
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("{0}")]
-    ResponseError(#[from] actix_web::Error),
+    Response(#[from] actix_web::Error),
     #[error("internal config error {0}")]
-    InternalConfigError(#[from] ConfigError),
+    InternalConfig(#[from] ConfigError),
     #[error("an unspecified internal error occurred {0}")]
-    InternalError(#[from] anyhow::Error),
+    Internal(#[from] anyhow::Error),
     #[error("remote error: {0}")]
-    RemoteError(#[from] reqwest::Error),
+    Remote(#[from] reqwest::Error),
     #[error("{0}")]
-    HttpError(#[from] http::Error),
+    Http(#[from] http::Error),
     #[error("srp error {0}")]
-    SrpAuthError(#[from] SrpError),
+    SrpAuth(#[from] SrpError),
 }
 
 impl From<ValidationErrors> for ApiError {
@@ -42,18 +42,18 @@ impl From<ValidationErrors> for ApiError {
         for (field, error) in value.errors() {
             msg.push_str(format!("{field}: {:?}", error).as_str())
         }
-        ApiError::ResponseError(ErrorBadRequest(msg))
+        ApiError::Response(ErrorBadRequest(msg))
     }
 }
 
 impl ResponseError for ApiError {
     fn status_code(&self) -> http::StatusCode {
         match self {
-            ApiError::InternalConfigError(e) => match e {
+            ApiError::InternalConfig(e) => match e {
                 ConfigError::Reqwest(e) => e.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                 ConfigError::Redis(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
-            ApiError::SrpAuthError(e) => match e {
+            ApiError::SrpAuth(e) => match e {
                 SrpError::ProgressError(_, _) => StatusCode::INTERNAL_SERVER_ERROR,
                 _ => StatusCode::BAD_REQUEST,
             },

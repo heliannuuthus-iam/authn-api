@@ -4,8 +4,8 @@ use actix_web::{
     get,
     http::header,
     post,
-    web::{self, Form, Json, Query},
-    HttpRequest, HttpResponse, Responder,
+    web::{self, Form, Query},
+    HttpResponse, Responder,
 };
 use chrono::Duration;
 use http::StatusCode;
@@ -17,8 +17,7 @@ use crate::{
         errors::{ApiError, Result},
         utils::gen_id,
     },
-    dto::auth::{validate_flow, AuthRequest, AuthorizationCode, Flow},
-    service::auth_service,
+    dto::auth::{AuthRequest, AuthorizationCode, Flow},
 };
 #[get("/authorize")]
 pub async fn query_authorize(Query(params): web::Query<AuthRequest>) -> Result<impl Responder> {
@@ -30,27 +29,18 @@ pub async fn form_authorize(Form(form): web::Form<AuthRequest>) -> Result<impl R
     authorize(&form).await
 }
 
-#[get("/public-config")]
-async fn oauth_login(req: HttpRequest) -> Result<impl Responder> {
-    let mut flow = validate_flow(&req).await?;
-
-    auth_service::build_connection(&mut flow).await.map(Json)
-}
-
 async fn authorize(params: &AuthRequest) -> Result<impl Responder> {
     params.validate()?;
     let mut flow = Flow::new(params.clone());
 
     match moka::get_idp_config(&flow.request.client_id).await? {
         Some(client) => {
-            flow.client_config = Some(client);
+            flow.client_idp_configs = Some(client);
         }
-        None => return Err(ApiError::ResponseError(ErrorUnauthorized("invalid_client"))),
+        None => return Err(ApiError::Response(ErrorUnauthorized("invalid_client"))),
     };
     // flow 校验
     flow.validate()?;
-
-    auth_service::build_connection(&mut flow).await?;
 
     Ok(HttpResponse::build(StatusCode::MOVED_PERMANENTLY)
         .append_header((header::LOCATION, flow.request.redirect_uri))
@@ -58,13 +48,13 @@ async fn authorize(params: &AuthRequest) -> Result<impl Responder> {
         .finish())
 }
 
-async fn authorization_code(flow: &mut Flow) -> Result<AuthorizationCode> {
-    let result = AuthorizationCode::new(gen_id(16), flow.request.state.clone());
+async fn authorization_code(flow: &Flow) -> Result<AuthorizationCode> {
+    let authorization_code = AuthorizationCode::new(gen_id(16), flow.request.state.clone());
     redis_setex(
         format!("forum:auth:code:{}", &flow.id).as_str(),
-        authorization_code.to_string(),
+        authorization_code.code.to_string(),
         Duration::minutes(10),
     )
     .await?;
-    Ok(result)
+    Ok(authorization_code)
 }
