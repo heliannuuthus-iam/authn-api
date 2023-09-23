@@ -1,29 +1,26 @@
+use actix_web::error::{ErrorBadRequest, ErrorUnauthorized};
 use anyhow::Context;
 use chrono::Duration;
-use http::{method, StatusCode};
 use ring::rand::{SecureRandom, SystemRandom};
 
 use crate::{
     common::{
-        cache::{cache_get, cache_setex},
-        client::REQWEST,
+        cache::redis::{redis_get, redis_setex},
         errors::{ApiError, Result},
-        nacos::rpc,
         srp::{
             groups::G_2048,
             server::{SrpServer, SrpServerVerifier},
         },
     },
-    dto::srp::SrpPassword,
+    dto::password::SrpPassword,
+    rpc::password_rpc,
 };
 
 pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)> {
-    let srp_meta = &(fetch_srp(i)
-        .await?
-        .ok_or(ApiError::Unauthenticated(format!(
-            "srp meta is nonexistant"
-        )))?);
-
+    let srp_meta = match password_rpc::fetch_srp_password(i).await? {
+        Some(meta) => meta,
+        None => return Err(ApiError::Response(ErrorUnauthorized("invalid_identifier"))),
+    };
     let srp_server = SrpServer::new(&G_2048);
     let rng = SystemRandom::new();
     let mut b = [0u8; 64];
@@ -39,7 +36,7 @@ pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)>
     })?;
     let server_verifier: SrpServerVerifier =
         srp_server.process_reply(&b, &verifier, &a_pub).unwrap();
-    cache_setex(
+    redis_setex(
         format!("forum:auth:srp:{i}").as_str(),
         server_verifier,
         Duration::minutes(1),
@@ -53,34 +50,21 @@ pub async fn pre_srp_login(i: &str, a_pub_str: &str) -> Result<(String, String)>
 
 pub async fn srp_login(identifier: &str, m1: &str) -> Result<()> {
     let server_verifier =
-        cache_get::<SrpServerVerifier>(format!("forum:auth:srp:{identifier}").as_str())
+        redis_get::<SrpServerVerifier>(format!("forum:auth:srp:{identifier}").as_str())
             .await?
-            .ok_or(ApiError::BadRequestError(format!("pre login first")))?;
+            .ok_or(ApiError::Response(ErrorBadRequest("pre login first")))?;
     let m1 = hex::decode(m1).with_context(|| {
         tracing::error!("client m1 decode failed");
         format!("client m1 decode failed")
     })?;
     server_verifier.verify_client(&m1).map_err(|e| {
         tracing::error!("verify client m1 failed, {:?}", e);
-        ApiError::Unauthenticated(format!("verify failed"))
+        ApiError::Response(ErrorUnauthorized("verify failed"))
     })?;
     Ok(())
 }
 
-async fn fetch_srp(i: &str) -> Result<Option<SrpPassword>> {
-    let resp = REQWEST
-        .execute(reqwest::Request::new(
-            method::Method::GET,
-            rpc(format!("http://forum-server/users/rsp/{}", i).as_str()).await?,
-        ))
-        .await
-        .with_context(|| {
-            tracing::error!("【获取 srp 数据失败】 identifier({:?})", i);
-            format!("fetch user srp data failed")
-        })?;
-    if resp.status() == StatusCode::NOT_FOUND {
-        Ok(None)
-    } else {
-        Ok(resp.json::<SrpPassword>().await.ok())
-    }
+pub async fn create_srp(srp: &SrpPassword) -> Result<()> {
+    password_rpc::save_srp_password(srp).await?;
+    Ok(())
 }

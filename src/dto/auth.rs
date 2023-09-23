@@ -1,17 +1,26 @@
+use std::time::Duration;
+
 use actix_web::{
-    cookie::{time::Duration, Cookie},
+    cookie::Cookie,
+    error::{ErrorPreconditionFailed, ErrorUnauthorized},
     HttpResponse,
 };
 use chrono::{DateTime, Utc};
 use http::Uri;
+use serde::{Deserialize, Serialize};
 use tracing::error;
 use validator::Validate;
 
+use super::client::{ClientConfig, ClientIdpConfigs};
 use crate::{
     common::{
-        cache::{cache_get, cache_setex},
+        cache::redis::{redis_get, redis_setex},
+        constant::{
+            AuthRequestType, PromptType, ResponseType, TokenType, CONFLICT_RESPONSE_TYPE,
+            OPENID_SCOPE,
+        },
         errors::{ApiError, Result},
-        oauth::{AuthCodeResponse, IdpType, OAuthUser},
+        jwt::{AccessToken, IdToken},
         utils::gen_id,
     },
     dto::user::{UserAssociation, UserProfile},
@@ -19,25 +28,51 @@ use crate::{
 
 #[derive(Debug, Clone, thiserror::Error, serde::Deserialize, serde::Serialize)]
 pub enum AuthError {
-    #[error("un_authenticate: {0}")]
-    UnAuthenticate(String),
-    #[error("access_denied: {0}")]
-    AccessDenied(String),
-    #[error("user not found: {0}")]
-    NotFound(String),
-    #[error("unprocessable entity: {0}")]
-    UnprocessableContent(String),
-    #[error("auth header error: {0}")]
-    PreconditionFailed(String),
+    #[error("invalid_client")]
+    InvalidClient,
+    #[error("login_required")]
+    LoginRequired,
+    #[error("account_selection_required")]
+    AccountSelectionRequired,
+    #[error("consent_required")]
+    ConsentRequired,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Validate, Default)]
-pub struct Params {
-    #[validate(length(min = 21, max = 22))]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate, Default)]
+pub struct AuthRequest {
     pub client_id: String,
-    pub connection: IdpType,
+    pub audience: Option<String>,
+    #[validate(length(min = 1, max = 2))]
+    pub response_type: Vec<ResponseType>,
+    pub scope: Vec<String>,
+    pub state: Option<String>,
     #[validate(url)]
     pub redirect_uri: String,
+    pub nonce: Option<String>,
+    // https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowSteps
+    pub prompt: PromptType,
+    // https://datatracker.ietf.org/doc/html/rfc7636
+    pub code_challenge_method: Option<String>,
+    pub code_challenge: Option<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AuthorizationCode {
+    pub code: String,
+    pub state: Option<String>,
+}
+
+impl AuthorizationCode {
+    pub fn new(code: String, state: Option<String>) -> Self {
+        Self { code, state }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Tokens {
+    token_type: TokenType,
+    id_token: IdToken,
+    access_token: AccessToken,
+    expires_in: Duration,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
@@ -53,12 +88,13 @@ pub enum FlowStage {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 pub struct Flow {
     pub id: String,
-    pub params: Params,
-    pub code_resp: Option<AuthCodeResponse>,
-    pub redirect_url: Option<String>,
-    pub current: Option<UserProfile>,
+    pub request: AuthRequest,
+    pub flow_type: Vec<AuthRequestType>,
+    pub client_config: Option<ClientConfig>,
+    pub client_idp_configs: Option<ClientIdpConfigs>,
+    pub authorization_code: Option<AuthorizationCode>,
+    pub tokens: Option<Tokens>,
     pub subject: Option<UserProfile>,
-    pub oauth_user: Option<OAuthUser>,
     pub associations: Vec<UserAssociation>,
     pub stage: FlowStage,
     pub error: Option<AuthError>,
@@ -71,36 +107,62 @@ impl Flow {
         gen_id(24)
     }
 
-    pub fn new(params: Params) -> Self {
+    pub fn new(params: AuthRequest) -> Self {
         Flow {
             id: Self::gen_id(),
-            params,
+            request: params,
             ..Default::default()
         }
     }
 
-    pub fn next_uri(&self) -> String {
-        let mut builder = Uri::builder().scheme("http");
-
-        builder = match self.transfer_error() {
-            Some(auth_err) => builder
-                .path_and_query("/done")
-                .path_and_query(format!("error={auth_err}")),
-            None => builder,
+    pub fn validate(&mut self) -> Result<()> {
+        let redirect_url = &self.client_config.as_ref().unwrap().redirect_url;
+        // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-insufficient-redirect-uri-v
+        if !redirect_url.contains(&self.request.redirect_uri) {
+            return Err(ApiError::Response(ErrorUnauthorized(
+                "invalid_redirect_url",
+            )));
         };
 
+        if self
+            .request
+            .response_type
+            .iter()
+            .filter(|&r| CONFLICT_RESPONSE_TYPE.contains(&r))
+            .count()
+            == CONFLICT_RESPONSE_TYPE.len()
+        {
+            return Err(ApiError::Response(ErrorUnauthorized(
+                "conflict_response_type",
+            )));
+        }
+        let flow_types = &mut self.flow_type;
+        // https://openid.net/specs/openid-connect-core-1_0.html#AuthRequestValidation
+        if self.request.scope.contains(&OPENID_SCOPE.to_string()) {
+            flow_types.push(AuthRequestType::Oidc);
+        }
+        flow_types.push(AuthRequestType::Oauth);
+        Ok(())
+    }
+
+    pub fn next_uri(&self) -> String {
+        let mut builder = Uri::builder().scheme("http");
         let next_uri = match self.stage {
             FlowStage::Initialized => "/login",
             FlowStage::Authenticating => "/login",
             FlowStage::Authenticated => "/confirm",
-            FlowStage::Authorized => "/done",
+            FlowStage::Authorized => self.request.redirect_uri.as_str(),
             FlowStage::Completed => "/done",
         };
-        builder
-            .path_and_query(next_uri)
-            .build()
-            .unwrap_or_default()
-            .to_string()
+        builder = builder.path_and_query(next_uri);
+        if let Some(auth_error) = &self.error {
+            builder.path_and_query(format!("error={auth_error}"))
+        } else {
+            builder
+        }
+        .build()
+        .unwrap_or_default()
+        .to_string()
     }
 
     pub fn dispatch(&self) -> Result<HttpResponse> {
@@ -132,45 +194,32 @@ impl Flow {
         };
         resp.add_cookie(
             &Cookie::build("auth_session", &self.id)
-                .max_age(Duration::minutes(10))
+                .max_age(actix_web::cookie::time::Duration::minutes(10))
                 .finish(),
         )?;
         Ok(resp)
-    }
-
-    fn transfer_error<'a>(&self) -> Option<&'a str> {
-        if let Some(ref err) = self.error {
-            match err {
-                AuthError::UnAuthenticate(_msg) => Some("invalid_client"),
-                AuthError::AccessDenied(_msg) => Some("access_denied"),
-                AuthError::UnprocessableContent(_msg) => Some("unproccessed"),
-                _ => Some("unkonw"),
-            }
-        } else {
-            None
-        }
     }
 }
 
 pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
     let session = req
         .cookie("auth_session")
-        .ok_or(ApiError::PreconditionFailed(format!(
-            "auth_session is lacked"
+        .ok_or(ApiError::Response(ErrorPreconditionFailed(
+            "auth_session is lacked",
         )))
         .map(|c| c.value().to_owned())?;
 
-    cache_get::<Flow>(format!("forum:auth:flow:{}", session).as_str())
+    redis_get::<Flow>(format!("forum:auth:flow:{}", session).as_str())
         .await
-        .map_err(|_| ApiError::PreconditionFailed("session is nonexsistent".to_string()))?
-        .ok_or(ApiError::PreconditionFailed(
-            "session is expired".to_string(),
-        ))
+        .map_err(|_| ApiError::Response(ErrorPreconditionFailed("session is nonexsistent")))?
+        .ok_or(ApiError::Response(ErrorPreconditionFailed(
+            "session is expired",
+        )))
         .and_then(|f| {
             if f.expires_at < Utc::now() {
-                return Err(ApiError::PreconditionFailed(
-                    "session is expired".to_string(),
-                ));
+                return Err(ApiError::Response(ErrorPreconditionFailed(
+                    "session is expired",
+                )));
             }
             Ok(f)
         })
@@ -179,11 +228,11 @@ pub async fn validate_flow(req: &actix_web::HttpRequest) -> Result<Flow> {
 async fn persist_flow(flow: &'_ Flow) -> Result<&'_ Flow> {
     let now = Utc::now();
     if flow.expires_at < now {
-        Err(ApiError::PreconditionFailed(
-            "session is expired".to_string(),
-        ))?
+        Err(ApiError::Response(ErrorPreconditionFailed(
+            "session is expired",
+        )))
     } else {
-        cache_setex(
+        redis_setex(
             format!("forum:auth:flow:{}", flow.id).as_str(),
             flow,
             now - flow.expires_at,
@@ -204,11 +253,11 @@ pub enum ChallengeType {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ChallengeRequest {
     #[serde(rename = "client_id")]
-    client_id: String,
+    pub client_id: String,
     #[serde(rename = "type")]
-    ctype: ChallengeType,
+    pub challenge_type: ChallengeType,
     #[serde(rename = "identifier")]
-    cer: String,
+    pub identifier: String,
     #[serde(rename = "proof")]
-    proof: String,
+    pub proof: String,
 }

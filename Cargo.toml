@@ -16,8 +16,6 @@ thiserror = "1.0"
 http = "0.2.9"
 lazy_static = "1.4.0"
 ring = "0.16.20"
-toml = "0.7.6"
-env_logger = "0.10.0"
 derive_builder = "0.12.0"
 redis = { version = "0.23.1", features = ["json", "aio", "tokio-comp"] }
 async-trait = "0.1.72"
@@ -26,7 +24,7 @@ tracing-subscriber = "0.3"
 tracing-actix-web = "0.7.6"
 tracing-appender = "0.2"
 
-chrono = "0.4.26"
+chrono = {version = "0.4.26", features = ["serde"]}
 lettre = { version = "0.10", features = [
   "builder",
   "tokio1-rustls-tls",
@@ -49,3 +47,9 @@ base64 = "0.21.3"
 openssl = "0.10.57"
 openssl-sys = "0.9.92"
 strum = { version = "0.25", features = ["derive"] }
+moka = { version = "0.12.0-beta.2", features = ["future"] }
+utoipa = { version = "3.5.0", features = ["actix_extras", "chrono"] }
+utoipa-redoc = { version = "0.1.0", features = ["actix-web"] }
+url = { version = "2.4.1", features = [] }
+pkce = "0.2.0"
+tokio-stream = "0.1.14"

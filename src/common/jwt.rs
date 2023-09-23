@@ -1,8 +1,8 @@
-use std::{convert::AsRef, str::FromStr};
+use std::{convert::AsRef, fmt::Debug, str::FromStr, time::Duration};
 
 use chrono::{
     serde::ts_microseconds::{deserialize as deserialize_to_ts, serialize as serialize_to_ts},
-    DateTime, Duration, Utc,
+    DateTime, Utc,
 };
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use openssl::error::ErrorStack;
@@ -14,38 +14,103 @@ use ring::{
         ECDSA_P256_SHA256_ASN1_SIGNING, ECDSA_P384_SHA384_ASN1_SIGNING,
     },
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use strum::{AsRefStr, EnumIter};
 
 use super::utils::gen_id;
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct Claims {
-    pub sub: Option<String>,
-    pub iss: Option<String>,
-    pub aud: Vec<String>,
-    #[serde(
-        serialize_with = "serialize_to_ts",
-        deserialize_with = "deserialize_to_ts"
-    )]
-    nbf: DateTime<Utc>,
-    #[serde(
-        serialize_with = "serialize_to_ts",
-        deserialize_with = "deserialize_to_ts"
-    )]
-    exp: DateTime<Utc>,
-    #[serde(
-        serialize_with = "serialize_to_ts",
-        deserialize_with = "deserialize_to_ts"
-    )]
-    iat: DateTime<Utc>,
+use crate::{common::constant::Gander, dto::user::UserProfile};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct IdToken {
+    #[serde(flatten)]
+    pub token: TokenCalims,
+    pub email: Option<String>,
+    pub picture: String,
+    pub name: String,
+    pub gander: Gander,
 }
 
-impl Claims {
-    pub fn new(subject: String, expires_in: Duration) -> Self {
-        Claims {
-            sub: Some(subject),
-            exp: Utc::now() + expires_in,
-            ..Default::default()
+impl IdToken {
+    pub fn new(client_id: &str, user: &UserProfile, expires_in: Duration) -> Self {
+        Self {
+            token: TokenCalims::new(
+                format!("https://auth.heliannuuthus.com/issuer/{}", client_id).as_str(),
+                &user.openid,
+                client_id,
+                expires_in,
+            ),
+            email: user.email.clone(),
+            picture: user.avatar.clone(),
+            name: user.nickname.clone(),
+            gander: user.gander.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccessToken {
+    #[serde(flatten)]
+    pub token: TokenCalims,
+    pub azp: String,
+    pub scope: Vec<String>,
+}
+
+impl AccessToken {
+    pub fn new(
+        subject: &str,
+        audience: &str,
+        azp: &str,
+        expires_in: Duration,
+        scope: Vec<String>,
+    ) -> Self {
+        Self {
+            token: TokenCalims::new(
+                format!("https://auth.heliannuuthus.com/issuer/{}", azp).as_str(),
+                subject,
+                audience,
+                expires_in,
+            ),
+            azp: azp.to_string(),
+            scope,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct TokenCalims {
+    pub iss: String,
+    pub sub: String,
+    // audience using single resource server
+    // https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics#name-access-token-privilege-rest
+    pub aud: String,
+    #[serde(
+        serialize_with = "serialize_to_ts",
+        deserialize_with = "deserialize_to_ts"
+    )]
+    pub exp: DateTime<Utc>,
+    #[serde(
+        serialize_with = "serialize_to_ts",
+        deserialize_with = "deserialize_to_ts"
+    )]
+    pub nbf: DateTime<Utc>,
+    #[serde(
+        serialize_with = "serialize_to_ts",
+        deserialize_with = "deserialize_to_ts"
+    )]
+    pub iat: DateTime<Utc>,
+    pub jti: String,
+}
+
+impl TokenCalims {
+    pub fn new(iss: &str, sub: &str, aud: &str, expires_in: std::time::Duration) -> Self {
+        Self {
+            iss: iss.to_string(),
+            sub: sub.to_string(),
+            aud: aud.to_string(),
+            exp: Utc::now() + chrono::Duration::from_std(expires_in).unwrap(),
+            nbf: Utc::now() - chrono::Duration::minutes(5),
+            iat: Utc::now(),
+            jti: gen_id(24),
         }
     }
 }
@@ -225,7 +290,7 @@ pub fn genrate_key(alg: JwtAlgorithm) -> Result<JwKPair> {
     Ok(JwKPair::new(alg, secret.clone()))
 }
 
-pub fn generate_jws(claims: &Claims, secret: &JwKPair) -> Result<String> {
+pub fn generate_jws<T: Serialize>(claims: &T, secret: &JwKPair) -> Result<String> {
     let mut headers = jsonwebtoken::Header::new(secret.export_alg()?);
     let encoding_key = match secret.alg.variant() {
         JwtAlgorithmVariant::Hmac => EncodingKey::from_secret(&secret.export_prikey()),
@@ -238,11 +303,11 @@ pub fn generate_jws(claims: &Claims, secret: &JwKPair) -> Result<String> {
         .map_err(|e| JwtErorr::SignError(format!("generate jws failed: {}", e)))
 }
 
-pub fn verify_jws(
+pub fn verify_jws<T: DeserializeOwned>(
     token: &str,
     secret: &JwKPair,
     validation: jsonwebtoken::Validation,
-) -> Result<Claims> {
+) -> Result<T> {
     let decoding_key = match secret.alg.variant() {
         JwtAlgorithmVariant::Hmac => DecodingKey::from_secret(&secret.export_pubkey()?),
         JwtAlgorithmVariant::Rsa => DecodingKey::from_rsa_der(&secret.export_pubkey()?),
@@ -251,7 +316,7 @@ pub fn verify_jws(
     };
 
     let jsonwebtoken::TokenData { header: _, claims } =
-        jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation)
+        jsonwebtoken::decode::<T>(token, &decoding_key, &validation)
             .map_err(|e| JwtErorr::VerifyError(format!("{}", e)))?;
 
     Ok(claims)

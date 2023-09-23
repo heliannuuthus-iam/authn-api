@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct PreSrpRequest {
     #[serde(rename = "i")]
     pub identifier: String,
     #[serde(rename = "a_pub")]
     pub a_pub: String,
 }
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct PreSrpRespose {
     #[serde(rename = "s")]
     pub salt: String,
@@ -23,7 +24,7 @@ pub struct SrpRequest {
     pub proof: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct SrpPassword {
     pub identifier: String,
     pub verifier: String,

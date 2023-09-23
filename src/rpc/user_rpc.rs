@@ -3,15 +3,13 @@ use reqwest::{Request, RequestBuilder, Response};
 use tracing::info;
 
 use crate::{
-    common::{client::REQWEST, errors::Result, nacos::rpc},
+    common::{client::WEB_CLIENT, constant::FORUM_SERVER, errors::Result, nacos::rpc},
     dto::user::SubjectProfile,
 };
 
-const FORUM_SERVER: &str = "forum-server";
-
 pub async fn registry() -> Result<()> {
     RequestBuilder::from_parts(
-        REQWEST.clone(),
+        WEB_CLIENT.clone(),
         Request::new(
             Method::POST,
             rpc(format!("http://{FORUM_SERVER}/registry").as_str()).await?,
@@ -30,7 +28,7 @@ pub async fn get_user_associations(openid: &str, idp: bool) -> Result<Option<Sub
         url.push_str("/idp")
     }
     let resp = RequestBuilder::from_parts(
-        REQWEST.clone(),
+        WEB_CLIENT.clone(),
         Request::new(Method::GET, rpc(url.as_str()).await?),
     )
     .send()

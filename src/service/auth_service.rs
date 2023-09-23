@@ -1,89 +1,20 @@
-use actix_web::HttpRequest;
-use anyhow::Context;
-use chrono::Duration;
-use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, TokenResponse};
+use std::collections::HashMap;
 
-use crate::{
-    common::{
-        cache::{cache_get, cache_setex},
-        errors::Result,
-        oauth::{async_http_client, select_connection_client},
-    },
-    dto::{
-        auth::{AuthError, Flow, FlowStage},
-        user::UserProfile,
-    },
-    rpc::user_rpc::get_user_associations,
-};
+use super::connection::{self};
+use crate::{common::errors::Result, dto::auth::Flow};
 
-// 生成认证链接
-pub async fn oauth_login(flow: &Flow) -> Result<String> {
-    let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
-    let mut client = select_connection_client(&flow.params.connection)?;
-    let scopes = client.scopes();
-    let (auth_url, csrf_token) = client
-        .client()
-        .authorize_url(CsrfToken::new_random)
-        .set_pkce_challenge(pkce_code_challenge)
-        .add_scopes(scopes)
-        .url();
-    // 将 pkce code 存入缓存中
-    cache_setex(
-        format!("forum:oauth:pkce:{}", csrf_token.secret()).as_str(),
-        pkce_code_verifier.secret(),
-        Duration::minutes(10),
-    )
-    .await?;
-    Ok(auth_url.to_string())
-}
-
-// oauth callback
-pub async fn oauth_user_profile(flow: &mut Flow, _request: HttpRequest) -> Result<()> {
-    let mut client = select_connection_client(&flow.params.connection)?;
-    let code_verifier = cache_get::<PkceCodeVerifier>(
-        format!(
-            "forum:oauth:pkce:{}",
-            flow.code_resp.as_ref().unwrap().state
-        )
-        .as_str(),
-    )
-    .await?
-    .unwrap();
-
-    let token = client
-        .client()
-        .exchange_code(AuthorizationCode::new(
-            flow.code_resp.as_ref().unwrap().code.clone(),
-        ))
-        .set_pkce_verifier(code_verifier)
-        .request_async(async_http_client)
-        .await
-        .context("exchange code failed")?;
-
-    // 查询
-    if let Some(ref oauth_user) = client.userinfo(token.access_token().secret()).await? {
-        flow.oauth_user = Some(oauth_user.clone());
-    }
-
-    match &flow.oauth_user {
-        Some(oauth_user) => {
-            if let Some(ref subject_profile) =
-                get_user_associations(&oauth_user.openid, true).await?
-            {
-                flow.subject = Some(UserProfile::from(subject_profile.clone()));
-                flow.associations = subject_profile.associations.clone();
-                flow.stage = FlowStage::Authenticated;
-            }
+// 生成 idp 认证链接
+pub async fn build_idp(flow: &Flow) -> Result<HashMap<String, String>> {
+    let idps = &flow.client_idp_configs.as_ref().unwrap().configs;
+    let mut idp_links: HashMap<String, String> = HashMap::with_capacity(idps.len());
+    for idp in idps.keys() {
+        if connection::select_identifier_provider(idp).ok().is_none() {
+            continue;
         }
-        None => {
-            flow.error = Some(AuthError::UnprocessableContent(format!(
-                "oauth user profile get failed"
-            )))
-        }
+        idp_links.insert(
+            idp.to_string(),
+            format!("https://auth.heliannuuthus.com/api/oauth/{:?}", idp),
+        );
     }
-
-    // oauth 身份注入成功，置为 authenticating
-    flow.stage = FlowStage::Authenticating;
-
-    Ok(())
+    Ok(idp_links.clone())
 }

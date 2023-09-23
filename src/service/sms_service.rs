@@ -6,14 +6,17 @@ use lettre::{
 };
 
 use crate::{
-    common::{client::REQWEST, config::env_var, errors::Result, nacos::NACOS_CLIENT},
+    common::{
+        client::WEB_CLIENT,
+        config::env_var,
+        constant::{FORUM_SERVER, FORUM_SERVER_CLUSTER},
+        errors::Result,
+        nacos::NACOS_CLIENT,
+    },
     dto::sms::{SmsConfig, SmsContext},
 };
 
-const FORUM_SERVER: &str = "forum-server";
-const FORUM_SERVER_CLUSTER: &str = "default";
-
-async fn get_sms_config(sms_temp_id: i64) -> Result<SmsConfig> {
+async fn get_sms_config(tempalte_id: &str) -> Result<SmsConfig> {
     let server = NACOS_CLIENT
         .select_one_healthy_instance(
             FORUM_SERVER.to_string(),
@@ -23,10 +26,10 @@ async fn get_sms_config(sms_temp_id: i64) -> Result<SmsConfig> {
         )
         .await
         .context("nacos instant get failed")?;
-    Ok(REQWEST
+    Ok(WEB_CLIENT
         .get(format!(
             "http://{}:{}/smsconfig/{}",
-            server.ip, server.port, sms_temp_id
+            server.ip, server.port, tempalte_id
         ))
         .send()
         .await
@@ -36,11 +39,11 @@ async fn get_sms_config(sms_temp_id: i64) -> Result<SmsConfig> {
         .context("sms config deserialize failed")?)
 }
 
-pub async fn send_msg(id: i64) -> Result<()> {
-    let mut context = get_sms_config(id).await.map(SmsContext::from)?;
+pub async fn send_msg(template_id: &str) -> Result<()> {
+    let mut context = get_sms_config(template_id).await.map(SmsContext::from)?;
     let message = context
         .render()
-        .context(format!("sms template reader error: {}", id))?;
+        .context(format!("sms template reader error: {}", template_id))?;
     // Open a remote connection to gmail
     AsyncSmtpTransport::<Tokio1Executor>::relay(env_var::<String>("SMTP_SERVER").as_str())
         .context("relay smtp server failed")?
@@ -59,6 +62,6 @@ pub async fn send_msg(id: i64) -> Result<()> {
                 .context("message build failed")?,
         )
         .await
-        .context(format!("send email failed: {}", id))?;
+        .context(format!("send email failed: {}", template_id))?;
     Ok(())
 }
