@@ -5,7 +5,7 @@ use crate::{
         cache::moka,
         errors::{ApiError, Result},
     },
-    dto::auth::ChallengeRequest,
+    dto::authorize::ChallengeRequest,
 };
 
 #[get("/challenge")]

@@ -1,5 +1,5 @@
 mod flow_test {
-    use forum_api::dto::auth::Flow;
+    use forum_api::dto::authorize::Flow;
 
     #[test]
     fn test_gen_id() {

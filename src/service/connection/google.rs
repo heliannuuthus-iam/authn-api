@@ -1,17 +1,19 @@
 use anyhow::Context;
-use async_trait::async_trait;
+
 use reqwest::Response;
 use serde_json::Value;
 
 use super::{IdentifierProvider, OAuthEndpoint, OAuthEndpointBuilder};
 use crate::{
     common::{client::WEB_CLIENT, config::env_var, errors::Result},
-    dto::{auth::Flow, client::ClientIdpConfig, user::IdpUser},
+    dto::{authorize::Flow, client::ClientIdpConfig, user::IdpUser},
     service::connection::{Connection, IdpType},
 };
+
 lazy_static::lazy_static!(
     pub static ref GOOGLE_CLIENT: Google = Google::default();
 );
+
 #[derive(Clone)]
 pub struct Google {
     endpoints: OAuthEndpoint,
@@ -31,22 +33,21 @@ impl Default for Google {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl Connection for Google {
     async fn verify(
         &self,
-        _identifier: Option<&str>,
-        _proof: &str,
+        _identifier: &str,
+        _proof: serde_json::Value,
         _state: Option<&str>,
-        _flow: &Flow,
-    ) {
+        _flow: &mut Flow,
+    ) -> Result<()> {
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl IdentifierProvider for Google {
-    type Type = IdpType;
-
     async fn authorize_link(
         &self,
         _config: &ClientIdpConfig,
@@ -55,7 +56,7 @@ impl IdentifierProvider for Google {
         Ok("".to_string())
     }
 
-    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>> {
+    async fn userinfo(&self, proof: &str) -> Result<Option<IdpUser>> {
         let body = WEB_CLIENT
             .get(self.endpoints.profile_endpoint.as_str())
             .bearer_auth(proof)
@@ -89,7 +90,7 @@ impl IdentifierProvider for Google {
         Ok(Some(oauth_user))
     }
 
-    fn types(&self) -> Self::Type {
+    fn types(&self) -> IdpType {
         IdpType::Google
     }
 }

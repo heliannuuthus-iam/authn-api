@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
+use actix_web::error::{ErrorPreconditionRequired, ErrorUnauthorized};
 use anyhow::Context;
 use async_trait::async_trait;
 use futures_util::{FutureExt, TryFutureExt};
 use reqwest::Response;
-use serde_json::Value;
+
 use tracing::error;
 use url::Url;
 
@@ -11,14 +14,16 @@ use crate::{
     common::{
         client::WEB_CLIENT,
         config::{env_var, env_var_default},
-        errors::Result,
+        errors::{ApiError, Result},
     },
-    dto::{auth::Flow, client::ClientIdpConfig, user::IdpUser},
+    dto::{authorize::Flow, client::ClientIdpConfig, token::TokenResponse, user::IdpUser},
     service::connection::{Connection, IdentifierProvider, IdpType, OAuthEndpoint},
 };
+
 lazy_static::lazy_static! {
     pub static ref GITHUB_CLIENT: GitHub = GitHub::default();
 }
+
 #[derive(Clone)]
 pub struct GitHub {
     endpoints: OAuthEndpoint,
@@ -39,27 +44,41 @@ impl Default for GitHub {
 }
 
 impl GitHub {
-    async fn exchange_token(&self, _code: &str, _state: &str, _flow: &Flow) -> Result<String> {
-        // HashMap::with_capacity(4);
-        // if let Some(config) = flow
-        //     .client_config
-        //     .unwrap()
-        //     .idp_configs
-        //     .iter()
-        //     .find(|&idp| self.types().eq(&idp.idp_type))
-        // {
-        //     form.insert("client_id", config.idp_client_id.as_str());
-        //     form.insert("client_secret", config.idp_client_secret.as_str());
-        //     form.insert("code", code);
-        //     form.insert("state", state);
-        //     &WEB_CLIENT.post(&self.endpoints.token_endpoint).form(&form)
-        // } else {
-        //
-        // };
-        Ok("".to_string())
+    async fn exchange_token(&self, code: &str, state: &str, flow: &Flow) -> Result<TokenResponse> {
+        let mut form = HashMap::with_capacity(4);
+        if let Some(config) = flow
+            .client_idp_configs
+            .as_ref()
+            .unwrap()
+            .configs
+            .get(&self.types())
+        {
+            form.insert("client_id", config.idp_client_id.as_str());
+            form.insert("client_secret", config.idp_client_secret.as_str());
+            form.insert("code", code);
+            form.insert("state", state);
+            Ok(reqwest::ClientBuilder::default()
+                .build()
+                .unwrap()
+                .post(&self.endpoints.token_endpoint)
+                .form(&form)
+                .send()
+                .await?
+                .json::<TokenResponse>()
+                .await
+                .with_context(|| {
+                    let msg = "[github] deserialize token response failed";
+                    tracing::error!(msg);
+                    msg
+                })?)
+        } else {
+            Err(ApiError::Response(ErrorPreconditionRequired(
+                "connection missing",
+            )))
+        }
     }
 
-    async fn fetch_profile(&mut self, token: &str) -> Result<Option<IdpUser>> {
+    async fn fetch_profile(&self, token: &str) -> Result<Option<IdpUser>> {
         Ok(WEB_CLIENT
             .get(self.endpoints.profile_endpoint.to_string())
             .bearer_auth(token)
@@ -92,7 +111,7 @@ impl GitHub {
             .ok())
     }
 
-    async fn fetch_email(&mut self, token: &str) -> Result<(Value, bool)> {
+    async fn fetch_email(&self, token: &str) -> Result<(String, bool)> {
         let (email, verified) = WEB_CLIENT
             .get(format!(
                 "{}{}",
@@ -115,12 +134,15 @@ impl GitHub {
                         if email["visibility"].is_string()
                             && email["visibility"].as_str().unwrap() == "private"
                         {
-                            Some((email.clone(), email["verified"].as_bool().unwrap()))
+                            Some((
+                                email.clone().to_string(),
+                                email["verified"].as_bool().unwrap(),
+                            ))
                         } else {
                             None
                         }
                     })
-                    .collect::<Vec<(Value, bool)>>()
+                    .collect::<Vec<(String, bool)>>()
                     .first()
                     .unwrap()
                     .clone()
@@ -129,10 +151,8 @@ impl GitHub {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl IdentifierProvider for GitHub {
-    type Type = IdpType;
-
     async fn authorize_link(
         &self,
         config: &ClientIdpConfig,
@@ -164,11 +184,23 @@ impl IdentifierProvider for GitHub {
             })?)
     }
 
-    async fn userinfo(&mut self, _proof: &str) -> Result<Option<IdpUser>> {
-        Ok(None)
+    async fn userinfo(&self, proof: &str) -> Result<Option<IdpUser>> {
+        let idp_user = &mut match self.fetch_profile(proof).await? {
+            Some(profile) => profile,
+            None => {
+                return Err(ApiError::Response(ErrorPreconditionRequired(
+                    "invalid github user",
+                )));
+            }
+        };
+
+        let (email, verified) = self.fetch_email(proof).await?;
+        idp_user.email_verified = verified;
+        idp_user.email = Some(email);
+        Ok(Some(idp_user.clone()))
     }
 
-    fn types(&self) -> Self::Type {
+    fn types(&self) -> IdpType {
         IdpType::GitHub
     }
 }
@@ -177,13 +209,27 @@ impl IdentifierProvider for GitHub {
 impl Connection for GitHub {
     async fn verify(
         &self,
-        _identifier: Option<&str>,
-        proof: &str,
+        _identifier: &str,
+        proof: serde_json::Value,
         state: Option<&str>,
-        flow: &Flow,
-    ) {
-        self.exchange_token(proof, state.unwrap(), flow)
-            .await
-            .unwrap();
+        flow: &mut Flow,
+    ) -> Result<()> {
+        if let Some(code) = proof.as_str() {
+            let token_response = self
+                .exchange_token(code, state.unwrap(), flow)
+                .await
+                .unwrap();
+
+            if let Some(user) = self.userinfo(&token_response.access_token).await? {
+                flow.idp_user = Some(user);
+                Ok(())
+            } else {
+                return Err(ApiError::Response(ErrorUnauthorized("login_required")));
+            }
+        } else {
+            Err(ApiError::Response(ErrorPreconditionRequired(
+                "invalid proof",
+            )))
+        }
     }
 }
