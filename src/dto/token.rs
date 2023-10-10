@@ -1,6 +1,7 @@
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use strum::Display;
 
 pub struct TokenRequest {
     pub grant_type: GrantType,
@@ -20,7 +21,7 @@ pub struct TokenResponse {
     pub state: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Display)]
 #[serde(rename_all = "snake_case")]
 pub enum GrantType {
     ClientCredentials,

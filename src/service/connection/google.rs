@@ -1,12 +1,23 @@
-use anyhow::Context;
+use std::collections::HashMap;
 
+use actix_web::error::ErrorPaymentRequired;
+use anyhow::Context;
 use reqwest::Response;
 use serde_json::Value;
 
 use super::{IdentifierProvider, OAuthEndpoint, OAuthEndpointBuilder};
 use crate::{
-    common::{client::WEB_CLIENT, config::env_var, errors::Result},
-    dto::{authorize::Flow, client::ClientIdpConfig, user::IdpUser},
+    common::{
+        client::WEB_CLIENT,
+        config::{env_var, env_var_default},
+        errors::{ApiError, Result},
+    },
+    dto::{
+        authorize::Flow,
+        client::ClientIdpConfig,
+        token::{GrantType, TokenResponse},
+        user::IdpUser,
+    },
     service::connection::{Connection, IdpType},
 };
 
@@ -17,6 +28,56 @@ lazy_static::lazy_static!(
 #[derive(Clone)]
 pub struct Google {
     endpoints: OAuthEndpoint,
+}
+
+impl Google {
+    pub async fn exchange_token(
+        &self,
+        code: &str,
+        state: &str,
+        flow: &Flow,
+    ) -> Result<TokenResponse> {
+        if let Some(config) = flow
+            .client_idp_configs
+            .as_ref()
+            .unwrap()
+            .configs
+            .get(&self.types())
+        {
+            let mut form: HashMap<&str, &str> = HashMap::with_capacity(5);
+            let redirect_uri = env_var_default::<String>(
+                "GITHUB_REDIRECT_URL",
+                "https://auth.heliannuuthus.com/api/callback/github".to_string(),
+            );
+            let grant_type = GrantType::AuthorizationCode.to_string();
+            form.insert("client_id", &config.idp_client_id);
+            form.insert("code", code);
+            form.insert("grant_type", &grant_type);
+            form.insert("redirect_uri", &redirect_uri);
+            Ok(WEB_CLIENT
+                .post(&self.endpoints.token_endpoint)
+                .form(&form)
+                .send()
+                .await
+                .and_then(Response::error_for_status)
+                .with_context(|| {
+                    let msg = "[google] exhange token failed ";
+                    tracing::error!(msg);
+                    msg
+                })?
+                .json::<TokenResponse>()
+                .await
+                .with_context(|| {
+                    let msg = "[google] deserialize token response failed";
+                    tracing::error!(msg);
+                    msg
+                })?)
+        } else {
+            Err(ApiError::Response(ErrorPaymentRequired(
+                "connection missing",
+            )))
+        }
+    }
 }
 
 impl Default for Google {
@@ -38,9 +99,9 @@ impl Connection for Google {
     async fn verify(
         &self,
         _identifier: &str,
-        _proof: serde_json::Value,
-        _state: Option<&str>,
-        _flow: &mut Flow,
+        proof: serde_json::Value,
+        state: Option<&str>,
+        flow: &mut Flow,
     ) -> Result<()> {
         Ok(())
     }
