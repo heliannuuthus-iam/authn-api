@@ -17,7 +17,7 @@ use crate::{
         errors::{ApiError, Result},
         utils::gen_id,
     },
-    dto::auth::{AuthRequest, AuthorizationCode, Flow},
+    dto::authorize::{AuthRequest, AuthorizationCode, Flow},
 };
 #[get("/authorize")]
 pub async fn query_authorize(Query(params): web::Query<AuthRequest>) -> Result<impl Responder> {

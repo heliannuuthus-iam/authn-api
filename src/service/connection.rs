@@ -12,11 +12,12 @@ use crate::{
         errors::{ApiError, Result},
         utils::{encode64, gen_random},
     },
-    dto::{auth::Flow, client::ClientIdpConfig, user::IdpUser},
+    dto::{authorize::Flow, client::ClientIdpConfig, user::IdpUser},
 };
 
 pub mod github;
 pub mod google;
+pub mod user;
 
 #[derive(Clone, Builder)]
 pub struct OAuthEndpoint {
@@ -58,9 +59,7 @@ impl From<String> for IdpType {
     }
 }
 
-pub fn select_identifier_provider(
-    idp_type: &IdpType,
-) -> Result<Box<dyn IdentifierProvider<Type = IdpType>>> {
+pub fn select_identifier_provider(idp_type: &IdpType) -> Result<Box<dyn IdentifierProvider>> {
     match idp_type {
         IdpType::GitHub => Ok(Box::new(GITHUB_CLIENT.clone())),
         IdpType::Google => Ok(Box::new(GOOGLE_CLIENT.clone())),
@@ -72,13 +71,17 @@ pub fn select_identifier_provider(
 
 #[async_trait::async_trait]
 pub trait Connection {
-    async fn verify(&self, identifier: Option<&str>, proof: &str, state: Option<&str>, flow: &Flow);
+    async fn verify(
+        &self,
+        identifier: &str,
+        proof: serde_json::Value,
+        state: Option<&str>,
+        flow: &mut Flow,
+    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 pub trait IdentifierProvider {
-    type Type;
-
     async fn pkce(&self, flow: &Flow) -> Result<(String, String)> {
         let code_verifier = encode64(&pkce::code_verifier(128));
         let state = gen_random(16);
@@ -101,6 +104,6 @@ pub trait IdentifierProvider {
         config: &ClientIdpConfig,
         extra: Vec<(&str, &str)>,
     ) -> Result<String>;
-    async fn userinfo(&mut self, proof: &str) -> Result<Option<IdpUser>>;
-    fn types(&self) -> Self::Type;
+    async fn userinfo(&self, proof: &str) -> Result<Option<IdpUser>>;
+    fn types(&self) -> IdpType;
 }

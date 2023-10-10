@@ -9,7 +9,7 @@ pub struct PreSrpRequest {
     pub a_pub: String,
 }
 #[derive(Deserialize, Serialize)]
-pub struct PreSrpRespose {
+pub struct PreSrpResponse {
     #[serde(rename = "s")]
     pub salt: String,
     #[serde(rename = "b_pub")]

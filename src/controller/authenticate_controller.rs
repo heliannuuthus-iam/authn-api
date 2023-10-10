@@ -7,7 +7,7 @@ use http::{header, StatusCode};
 
 use crate::{
     common::errors::Result,
-    dto::password::{PreSrpRequest, PreSrpRespose, SrpPassword, SrpRequest},
+    dto::password::{PreSrpRequest, PreSrpResponse, SrpPassword, SrpRequest},
     service::user_service,
 };
 
@@ -21,7 +21,7 @@ pub async fn registry(Json(form): Json<SrpPassword>) -> Result<impl Responder> {
 #[get("/login")]
 pub async fn pre_login(Query(query): Query<PreSrpRequest>) -> Result<impl Responder> {
     let (salt, b_pub) = user_service::pre_srp_login(&query.identifier, &query.a_pub).await?;
-    Ok(Json(PreSrpRespose { salt, b_pub }))
+    Ok(Json(PreSrpResponse { salt, b_pub }))
 }
 
 #[post("/login")]

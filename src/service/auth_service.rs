@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::connection::{self};
-use crate::{common::errors::Result, dto::auth::Flow};
+use crate::{common::errors::Result, dto::authorize::Flow};
 
 // 生成 idp 认证链接
 pub async fn build_idp(flow: &Flow) -> Result<HashMap<String, String>> {

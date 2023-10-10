@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 use validator::Validate;
 
-use super::client::{ClientConfig, ClientIdpConfigs};
+use super::{
+    client::{ClientConfig, ClientIdpConfigs},
+    user::IdpUser,
+};
 use crate::{
     common::{
         cache::redis::{redis_get, redis_setex},
@@ -95,6 +98,7 @@ pub struct Flow {
     pub authorization_code: Option<AuthorizationCode>,
     pub tokens: Option<Tokens>,
     pub subject: Option<UserProfile>,
+    pub idp_user: Option<IdpUser>,
     pub associations: Vec<UserAssociation>,
     pub stage: FlowStage,
     pub error: Option<AuthError>,
